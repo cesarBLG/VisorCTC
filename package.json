@@ -1,0 +1,29 @@
+{
+  "name": "visorctc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "build": "cd client && npm run build",
+    "dev": "npm run server:dev & npm run client:dev",
+    "server:dev": "nodemon server.js",
+    "client:dev": "cd client && npm run dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "express": "^5.1.0",
+    "mqtt": "^5.14.1",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3",
+    "xmldom": "^0.6.0",
+    "xpath": "^0.0.34"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
