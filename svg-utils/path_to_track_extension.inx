@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+  <name>Circuito de vía</name>
+  <id>org.inkscape.tutorial.path_to_track_extension</id>
+  <param name="inicio_recto" type="boolean" gui-text="Inicio en cuadrícula" default="true"/>
+  <param name="fin_recto" type="boolean" gui-text="Fin en cuadrícula" default="true"/>
+  <effect>
+    <effects-menu>
+      <submenu name="Generate from Path"/>
+    </effects-menu>
+  </effect>
+  <script>
+    <command location="inx" interpreter="python">path_to_track_extension.py</command>
+  </script>
+</inkscape-extension>
+
