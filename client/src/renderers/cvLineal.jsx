@@ -10,6 +10,8 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
 
   const comp = el.Componente;
   comp.querySelector('[inkscape\\:label="track"]').style.fill = isBlinking || (est.CV_DAT ?? 0) == 1 ? color : 'transparent';
+  comp.querySelector('[inkscape\\:label="track"]').style.stroke = isBlinking || (est.CV_DAT ?? 0) == 1 ? color : 'transparent';
+  comp.querySelector('[inkscape\\:label="track"]').style.strokeWidth = 0.2;
   comp.querySelector('[inkscape\\:label="bar_up"]').style.visibility = ((est.CV_CEJES_PREN ?? 0) == 1 && isBlinking) ? 'visible' : 'hidden';
   comp.querySelector('[inkscape\\:label="bar_down"]').style.visibility = ((est.CV_CEJES_PREN ?? 0) == 1 && isBlinking) ? 'visible' : 'hidden';
   comp.querySelector('[inkscape\\:label="me_up"]').style.visibility = (est.CV_ME ?? 0) == 1 ? 'visible' : 'hidden';
@@ -23,26 +25,33 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
   const centerX = bbox.x + bbox.width / 2;
   const centerY = bbox.y + bbox.height / 2;
 
-  let text = comp.querySelector("text");
-  let rect = comp.querySelector("rect");
-  if (!text) {
-    rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  let gNumerador = comp.querySelector('[inkscape\\:label="numerador"]');
+  if (!gNumerador) {
+    gNumerador = document.createElementNS('http://www.w3.org/2000/svg', "g");
+    gNumerador.setAttributeNS("http://www.inkscape.org/namespaces/inkscape", "inkscape:label", "numerador");
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', centerX-30);
     rect.setAttribute('y', centerY-10);
     rect.setAttribute('width', '60');
     rect.setAttribute('height', '20');
     rect.setAttribute('fill', 'black');
-    comp.appendChild(rect);
+    gNumerador.appendChild(rect);
 
-    text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", centerX);
     text.setAttribute("y", centerY);
     text.setAttribute("text-anchor", "middle");
     text.setAttribute("dominant-baseline", "middle");
     text.setAttribute("font-size", "20");
     text.style.pointerEvents = "none";
-    comp.appendChild(text);
+    gNumerador.appendChild(text);
+
+
+    comp.appendChild(gNumerador);
   }
+  let text = gNumerador.querySelector("text");
+  let rect = gNumerador.querySelector("rect");
   text.setAttribute("fill", color);
   const trenes = numerador[`${el.Estación}:${el.Id}`];
   if (trenes && trenes.length > 0) {

@@ -23,34 +23,38 @@ Description of this extension
 
 import inkex
 import track_utils
+import track_to_svg
 
 class PathToTrackExtension(inkex.EffectExtension):
     def add_arguments(self, pars):
         pars.add_argument("--inicio_recto", type=inkex.Boolean, default=False)
         pars.add_argument("--fin_recto", type=inkex.Boolean, default=False)
+        pars.add_argument("--av", type=inkex.Boolean, default=False)
 
     def effect(self):
         for elem in self.svg.selection:
-            path_data = elem.get('d')
-            coords = track_utils.parse_path_commands(path_data)
-            track = track_utils.generate_track_svg(coords, inicio_recto=self.options.inicio_recto, fin_recto=self.options.fin_recto)
-            paths = track_utils.generate_path_from_coords(track)
-            group = inkex.Group()
-            self.svg.get_current_layer().append(group)
-            colors = ['#ffff00','#ffffff','#ffff00','#ffffff','#ffff00']
-            names = ['bar_up', 'me_up', 'track', 'me_down', 'bar_down']
-            for i,path_data in enumerate(paths):
-                path = inkex.PathElement()
-                path.set("d", path_data)
-                path.style = {
-                    "stroke": "none",
-                    "fill": colors[i]
-                }
-                path.set('inkscape:label', names[i])
-                # Insert the new path into the current Inkscape document
-                group.append(path)
-            elem.set("style", "display:none")
-            #group.append(elem)
+            if isinstance(elem, inkex.Group):
+                glabel = elem.get("inkscape:label")
+                path_data = None
+                for child in list(elem):
+                    label = child.get("inkscape:label")
+                    if label == glabel:
+                        path_data = child.get('d')
+                    elif label in ['track', 'me_up', 'me_down', 'bar_up', 'bar_down', 'bv']:
+                        elem.remove(child)
+                if path_data is not None:
+                    coords = track_utils.parse_path_commands(path_data)
+                    group = track_to_svg.generate_track_svg(coords, av=self.options.av, inicio_recto=self.options.inicio_recto, fin_recto=self.options.fin_recto, name=elem.get('inkscape:label'))
+                    for item in group:
+                        elem.append(item)
+            else:
+                path_data = elem.get('d')
+                coords = track_utils.parse_path_commands(path_data)
+                group = track_to_svg.generate_track_svg(coords, av=self.options.av, inicio_recto=self.options.inicio_recto, fin_recto=self.options.fin_recto, name=elem.get('inkscape:label'))
+                self.svg.get_current_layer().append(group)
+                elem.set("style", "display:none")
+                self.svg.get_current_layer().remove(elem)
+                group.append(elem)
 
 if __name__ == '__main__':
     PathToTrackExtension().run()

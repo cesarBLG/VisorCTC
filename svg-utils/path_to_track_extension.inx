@@ -4,6 +4,7 @@
   <id>org.inkscape.tutorial.path_to_track_extension</id>
   <param name="inicio_recto" type="boolean" gui-text="Inicio en cuadrícula" default="true"/>
   <param name="fin_recto" type="boolean" gui-text="Fin en cuadrícula" default="true"/>
+  <param name="av" type="boolean" gui-text="AV" default="false"/>
   <effect>
     <effects-menu>
       <submenu name="Generate from Path"/>

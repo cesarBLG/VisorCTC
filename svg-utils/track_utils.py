@@ -6,7 +6,7 @@ def dot(v1, v2):
     """Calculates the dot product of two 2D vectors represented as tuples."""
     return v1[0] * v2[0] + v1[1] * v2[1]
 
-def generate_track_svg(points, generator=[-4.5, -3.5, -3.5, -2.5, -2.5, 2.5, 2.5, 3.5, 3.5, 4.5], *, inicio_recto=True, fin_recto=True):
+def generate_track_points(points, generator=[-4.5, -3.5, -3.5, -2.5, -2.5, 2.5, 2.5, 3.5, 3.5, 4.5, -1.25, 1.25], *, inicio_recto=True, fin_recto=True, vec_inicio=None, vec_fin=None):
     npoints = len(points)
     coords = []
     
@@ -30,6 +30,8 @@ def generate_track_svg(points, generator=[-4.5, -3.5, -3.5, -2.5, -2.5, 2.5, 2.5
                     bisec = (1,0)
                 else:
                     bisec = (0,1)
+            elif vec_inicio:
+                bisec = vec_inicio
             else:
                 bisec = vecnext
             normal = (-bisec[1], bisec[0])  # Perpendicular to bisec
@@ -40,6 +42,8 @@ def generate_track_svg(points, generator=[-4.5, -3.5, -3.5, -2.5, -2.5, 2.5, 2.5
                     bisec = (1,0)
                 else:
                     bisec = (0,1)
+            elif vec_fin:
+                bisec = vec_fin
             else:
                 bisec = vecprev
             # For the last point, use normal vector n1

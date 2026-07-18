@@ -23,9 +23,10 @@ Description of this extension
 
 import inkex
 import track_utils
+import track_to_svg
 import math
 
-def generate_junction(angle):
+def generate_junction(angle, av=False):
     # Define constants as before
     lock_width = 8.0
     track_width = 5.0
@@ -50,64 +51,97 @@ def generate_junction(angle):
     cut1 = (lock_width + 2 * gap_horiz + track_width / 2 * math.tan(angle / 2), 0)
     cut2 = (cut1[0] + cut_height / math.tan(angle), cut1[1] + cut_height)
 
-    deslizRneg = track_utils.generate_track_svg([(0, desliz_pos), 
-                                    (cut1[0] + desliz_pos * normal[0] / cosang, cut1[1] + desliz_pos * normal[1] / cosang), 
-                                    (cut2[0] - desliz_pos / math.sin(angle), cut2[1])],
-                                    [-desliz_width / 2, desliz_width / 2])
+    t2R_width = track_width / 2 * math.tan(angle / 2) + (desliz_pos+desliz_width/2) * (1 / math.tan(angle) + 1 / math.sin(angle))
 
-    deslizRpos0 = track_utils.generate_track_svg([(0, desliz_pos), 
-                                    (lock_width + gap_horiz, desliz_pos)],
-                                    [-desliz_width / 2, desliz_width / 2])
-    
-    deslizRpos1 = track_utils.generate_track_svg([(lock_width + gap_horiz, desliz_pos), 
-                                    (lock_width + 2 * gap_horiz + t2R_width, desliz_pos)],
-                                    [-desliz_width / 2, desliz_width / 2])
+    def gen_path(points, gen, name=None, color='#ff0', *, inicio_recto=True, fin_recto=True, vec_inicio=None, vec_fin=None):
+        return track_to_svg.create_path(track_utils.generate_path_from_coords(track_utils.generate_track_points(points, gen, inicio_recto=inicio_recto, fin_recto=fin_recto, vec_inicio=vec_inicio, vec_fin=vec_fin))[0], name, color)
 
-    deslizLpos = track_utils.generate_track_svg([(lock_width + gap_horiz, -desliz_pos), 
-                                    (lock_width + 2 * gap_horiz + t2R_width, -desliz_pos)],
-                                    [-desliz_width / 2, desliz_width / 2])
+    paths = []
 
-    deslizLneg0 = track_utils.generate_track_svg([(0, -desliz_pos), 
-                                    (lock_width + gap_horiz, -desliz_pos)],
-                                    [-desliz_width / 2, desliz_width / 2])
+    if not av:
+        group = inkex.Group()
+        group.set("inkscape:label", "bv")
+        paths.append(group)
+        group.append(gen_path([(0, 0), cut1], [-3*desliz_width/2+desliz_pos,desliz_pos+desliz_width/2], 'bvL', '#f0f', fin_recto=False, vec_fin=bisec))
+        group.append(gen_path([(0, 0), cut1], [-desliz_width/2-desliz_pos,-desliz_pos+3*desliz_width/2], 'bvR', '#f0f', fin_recto=False, vec_fin=bisec))
+        group.append(gen_path([cut1, (lock_width + 2 * gap_horiz + t2R_width, 0)], [-3*desliz_width/2+desliz_pos,desliz_pos+desliz_width/2], 'bvLpos', '#f0f', inicio_recto=False, vec_inicio=bisec))
+        group.append(gen_path([cut1, (lock_width + 2 * gap_horiz + t2R_width, 0)], [-desliz_width/2-desliz_pos,-desliz_pos+3*desliz_width/2], 'bvRpos', '#f0f', inicio_recto=False, vec_inicio=bisec))
+        group.append(gen_path([cut1, cut2], [-3*desliz_width/2+desliz_pos,desliz_pos+desliz_width/2], 'bvLneg', '#f0f', inicio_recto=False, vec_inicio=bisec))
+        group.append(gen_path([cut1, cut2], [-desliz_width/2-desliz_pos,-desliz_pos+3*desliz_width/2], 'bvRneg', '#f0f', inicio_recto=False, vec_inicio=bisec))
 
-    deslizLneg1 = track_utils.generate_track_svg([(lock_width + gap_horiz, -desliz_pos), 
-                                    (cut1[0] - desliz_pos * normal[0] / cosang, cut1[1] - desliz_pos * normal[1] / cosang), 
-                                    (cut2[0] + desliz_pos / math.sin(angle), cut2[1])],
-                                    [-desliz_width / 2, desliz_width / 2])
-    
-    deslizLneg2 = track_utils.generate_track_svg([(lock_width + 2 * gap_horiz + t2R_width, desliz_pos),
-                                    (cut1[0] - desliz_pos * normal[0] / cosang + 2 * desliz_pos / math.tan(angle), desliz_pos),
-                                    (cut2[0] + desliz_pos / math.sin(angle), cut2[1])],
-                                    [-desliz_width / 2, desliz_width / 2])
+    me = inkex.Group()
+    me.set("inkscape:label", "me")
+    paths.append(me)
+    me.append(gen_path([(0, 0), (lock_width + 2 * gap_horiz + t2R_width, 0)], [-track_width/2-desliz_width,track_width/2+desliz_width], color='#fff'))
+    me.append(gen_path([(lock_width + 2 * gap_horiz + track_width / 2 / math.sin(angle), track_width / 2), cut2], [-track_width/2-desliz_width,track_width/2+desliz_width], color='#fff'))
 
-    t1 = track_utils.generate_track_svg([(gap_horiz, 0), 
+    paths.append(gen_path([(gap_horiz, 0), 
                             (gap_horiz + lock_width, 0)],
-                            [-track_width / 2, track_width / 2])
+                            [-track_width / 2, track_width / 2], 't1',  '#00f'))
 
     t2 = [(lock_width + 2 * gap_horiz, -track_width / 2), 
         (cut1[0] - track_width / 2 * normal[0] / cosang, cut1[1] - track_width / 2 * normal[1] / cosang), 
         (lock_width + 2 * gap_horiz + track_width / math.sin(angle), track_width / 2), 
         (lock_width + 2 * gap_horiz, track_width / 2)]
 
-    t2 = [[t2[0], t2[3]], [t2[1], t2[2]]]
+    paths.append(track_to_svg.create_path(track_utils.generate_path_from_coords([[t2[0], t2[3]], [t2[1], t2[2]]])[0], 't2'))
 
-    t2L = track_utils.generate_track_svg([(lock_width + 2 * gap_horiz + track_width / 2 / math.sin(angle), track_width / 2), cut2],
-                            [-track_width / 2, track_width / 2])
+    paths.append(gen_path([(lock_width + 2 * gap_horiz + track_width / 2 / math.sin(angle), track_width / 2), cut2],
+                            [-track_width / 2, track_width / 2], 't2L'))
 
-    t3L = track_utils.generate_track_svg([cut2, 
-                            (cut2[0] + t3L_height / math.tan(angle), cut2[1] + t3L_height)])
+    paths.append(track_to_svg.generate_track_svg([cut2, 
+                            (cut2[0] + t3L_height / math.tan(angle), cut2[1] + t3L_height)], name='t3L', av=av))
 
     t2R = [(cut1[0] - track_width / 2 * normal[0] / cosang, cut1[1] - track_width / 2 * normal[1] / cosang), 
         (lock_width + 2 * gap_horiz + track_width / math.sin(angle), track_width / 2), 
         (lock_width + 2 * gap_horiz + t2R_width, track_width / 2), 
         (lock_width + 2 * gap_horiz + t2R_width, -track_width / 2)]
 
-    t2R = [[t2R[0], t2R[3]], [t2R[1], t2R[2]]]
+    paths.append(track_to_svg.create_path(track_utils.generate_path_from_coords([[t2R[0], t2R[3]], [t2R[1], t2R[2]]])[0], 't2R'))
 
-    t3R = track_utils.generate_track_svg([(lock_width + 2 * gap_horiz + t2R_width, 0), 
-                            (lock_width + 2 * gap_horiz + t2R_width + t3R_width, 0)])
-    return [deslizRneg, deslizRpos0, deslizRpos1, deslizLpos, deslizLneg0, deslizLneg1, deslizLneg2, t1, t2, t2L, t3L, t2R, t3R]
+    paths.append(track_to_svg.generate_track_svg([(lock_width + 2 * gap_horiz + t2R_width, 0), 
+                            (lock_width + 2 * gap_horiz + t2R_width + t3R_width, 0)], name='t3R', av=av))
+
+    if av:
+        group = inkex.Group()
+        group.set("inkscape:label", "bv")
+        paths.append(group)
+        group.append(gen_path([(0, 0), cut1], [-track_width/4, track_width/4], 'bvL', '#000', fin_recto=False, vec_fin=bisec))
+        group.append(gen_path([cut1, (lock_width + 2 * gap_horiz + t2R_width, 0)], [-track_width/4, track_width/4], 'bvLpos', '#000', inicio_recto=False, vec_inicio=bisec))
+        group.append(gen_path([cut1, cut2], [-track_width/4, track_width/4], 'bvLneg', '#000', inicio_recto=False, vec_inicio=bisec))
+
+    paths.append(gen_path([(0, desliz_pos), 
+                            (cut1[0] + desliz_pos * normal[0] / cosang, cut1[1] + desliz_pos * normal[1] / cosang), 
+                            (cut2[0] - desliz_pos / math.sin(angle), cut2[1])],
+                            [-desliz_width / 2, desliz_width / 2], name='deslizRneg'))
+
+    paths.append(gen_path([(0, desliz_pos), 
+                                    (lock_width + gap_horiz, desliz_pos)],
+                                    [-desliz_width / 2, desliz_width / 2], 'deslizRpos0'))
+    
+    paths.append(gen_path([(lock_width + gap_horiz, desliz_pos), 
+                                    (lock_width + 2 * gap_horiz + t2R_width, desliz_pos)],
+                                    [-desliz_width / 2, desliz_width / 2], 'deslizRpos1'))
+
+    paths.append(gen_path([(lock_width + gap_horiz, -desliz_pos), 
+                                    (lock_width + 2 * gap_horiz + t2R_width, -desliz_pos)],
+                                    [-desliz_width / 2, desliz_width / 2], 'deslizLpos'))
+
+    paths.append(gen_path([(0, -desliz_pos), 
+                                    (lock_width + gap_horiz, -desliz_pos)],
+                                    [-desliz_width / 2, desliz_width / 2], 'deslizLneg0'))
+
+    paths.append(gen_path([(lock_width + gap_horiz, -desliz_pos), 
+                                    (cut1[0] - desliz_pos * normal[0] / cosang, cut1[1] - desliz_pos * normal[1] / cosang), 
+                                    (cut2[0] + desliz_pos / math.sin(angle), cut2[1])],
+                                    [-desliz_width / 2, desliz_width / 2], 'deslizLneg1'))
+    
+    paths.append(gen_path([(lock_width + 2 * gap_horiz + t2R_width, desliz_pos),
+                                    (cut1[0] - desliz_pos * normal[0] / cosang + 2 * desliz_pos / math.tan(angle), desliz_pos),
+                                    (cut2[0] + desliz_pos / math.sin(angle), cut2[1])],
+                                    [-desliz_width / 2, desliz_width / 2], 'deslizLneg2'))
+
+    return paths
 
 
 class GenerateJunctionExtension(inkex.EffectExtension):
@@ -115,34 +149,24 @@ class GenerateJunctionExtension(inkex.EffectExtension):
         pars.add_argument("--angulo", type=float, default=7.0)
 
     def effect(self):
-        group = inkex.Group()
-        self.svg.get_current_layer().append(group)
-        items = generate_junction(self.options.angulo*math.pi/18)
-        names = ['deslizRneg', 'deslizRpos0', 'deslizRpos1', 'deslizLpos', 'deslizLneg0', 'deslizLneg1', 'deslizLneg2', 't1', 't2', 't2L', 't3L', 't2R', 't3R']
-
-        def append_path(group, path_data, name, color='#ffff00'):
-            path = inkex.PathElement()
-            path.set("d", path_data)
-            path.style = {
-                "stroke": "none",
-                "fill": color
-            }
-            path.set("inkscape:label", name)
-            # Insert the new path into the current Inkscape document
-            group.append(path)
-
-        for i, coords in enumerate(items):
-            if names[i] == "t3L" or names[i] == "t3R":
-                group2 = inkex.Group()
-                group.append(group2)
-                group2.set("inkscape:label", names[i])
-                colors2 = ['#ffff00','#ffffff','#ffff00','#ffffff','#ffff00']
-                names2 = ['bar_up', 'me_up', 'track', 'me_down', 'bar_down']
-                for j, p in enumerate(track_utils.generate_path_from_coords(coords)):
-                    append_path(group2, p, names2[j], colors2[j])
-            else:
-                for p in track_utils.generate_path_from_coords(coords):
-                    append_path(group, p, names[i])
+        new = True
+        for elem in self.svg.selection.values():
+            if isinstance(elem, inkex.Group):
+                new = False
+                for child in list(elem):
+                    label = child.get("inkscape:label")
+                    if label in ['t1a','t3Ra','t3La']:
+                        continue
+                    elem.remove(child)
+                items = generate_junction(self.options.angulo*math.pi/18)
+                for item in items:
+                    elem.append(item)
+        if new:
+            group = inkex.Group()
+            self.svg.get_current_layer().append(group)
+            items = generate_junction(self.options.angulo*math.pi/18)
+            for item in items:
+                group.append(item)
 
 if __name__ == '__main__':
     GenerateJunctionExtension().run()

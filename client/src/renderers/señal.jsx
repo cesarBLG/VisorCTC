@@ -53,7 +53,21 @@ export const renderSeñal = (el, state, isBlinking) => {
   const regs = ['sig1', 'sig2', 'sig3', 'sig4']
   for (const i in regs) {
     const s = comp.querySelector(`[inkscape\\:label="${regs[i]}"]`)
-    s.style.fill = isBlinking || !blink[i] ? colors[i] : 'transparent';
+    if (!s) {
+      if (regs[i] === 'sig1') {
+        colors[3] = colors[2];
+        blink[3] = blink[2];
+        colors[2] = colors[1] = colors[0];
+        blink[2] = blink[1] = blink[0];
+        colors[0] = 'transparent'
+        blink[0] = false;
+      }
+      continue
+    }
+    s.style.visibility = isBlinking || !blink[i] ? 'visible' : 'hidden'
+    s.style.fill = colors[i];
+    s.style.stroke = s.style.fill;
+    s.style.strokeWidth = 0.2;
   }
   comp.querySelector('[inkscape\\:label="nombre"]').querySelector('tspan').style.fill = (sig.SIG_B ?? 0) ? '#fff' : '#ff0';
   comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = (sig.SIG_B ?? 0) ? '#f00' : '#000';
