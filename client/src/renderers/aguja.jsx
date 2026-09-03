@@ -106,10 +106,10 @@ export const renderAguja = (el, state, isBlinking) => {
     if (bia) bia.style.visibility = (est.AG_BIA ?? 0) == 1 ? 'visible' : 'hidden';
   }
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t1a"]'), color_ocup, false, bar_punta);
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3R"]'), color_ocup, est.AG_COMP === 0 && est.AG_COMP === 1, bar_normal);
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3Ra"]'), est.AG_DIR === 2 ? '#fff' : color_ocup, bar_normal)
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3L"]'), est.AG_DIR === 1 ? '#fff' : color_ocup, est.AG_COMP === 0 || est.AG_COMP === 2, bar_inv)
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3La"]'), est.AG_DIR === 1 ? '#fff' : color_ocup, bar_inv)
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3R"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, est.AG_COMP === 0 && est.AG_COMP === 1, bar_normal);
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3Ra"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, bar_normal)
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3L"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, est.AG_COMP === 0 || est.AG_COMP === 2, bar_inv)
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3La"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, bar_inv)
 
   setDesliz(comp.querySelector('[inkscape\\:label="deslizLneg0"]'), bar_punta);
   setDesliz(comp.querySelector('[inkscape\\:label="deslizRpos0"]'), (!bar_inv || est.AG_COMP === 4) ? bar_punta : null)

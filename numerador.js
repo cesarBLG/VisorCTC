@@ -39,7 +39,6 @@ class numerador {
         this.broadcastClients = broadcastClients;
     }
     send(idSecciones) {
-        return;
         if (!idSecciones || idSecciones.length === 0) return;
         const list = [];
         for (const idSeccion of idSecciones) {

@@ -84,8 +84,7 @@ const broadcastClients = (msg) => {
   });
 }
 
-const topologyJson = JSON.parse(fs.readFileSync(path.join(__dirname, "config/config.json"), "utf8"));
-const numeradorTrenes = new numerador(topologyJson, broadcastClients)
+const numeradorTrenes = null;// = new numerador(JSON.parse(fs.readFileSync(path.join(__dirname, "config/config.json"), "utf8")), broadcastClients)
 
 const onMqttError = () => {
   for (const key of Object.keys(datosRemota)) {
@@ -151,13 +150,13 @@ const handleMessage = (topic, message) => {
           const isReservado = (e) => {
             return e.Tipo === 4 && e.CV_EST === 1;
           }
-          numeradorTrenes.onCambioEstadoSeccion(element.Id, isOcupado(element) ? "Ocupado" : isReservado(element) ? "Reservado": "Libre");
+          numeradorTrenes?.onCambioEstadoSeccion(element.Id, isOcupado(element) ? "Ocupado" : isReservado(element) ? "Reservado": "Libre");
         }
         if (element.Tipo === 14) {
-          numeradorTrenes.onCambioBloqueo(element.Id, (element.BLQ_EST_SAL === 1 || element.BLQ_EST_SAL === 2) ? "Emisor" : (element.BLQ_EST_ENT === 1 ? "Receptor" : null))
+          numeradorTrenes?.onCambioBloqueo(element.Id, (element.BLQ_EST_SAL === 1 || element.BLQ_EST_SAL === 2) ? "Emisor" : (element.BLQ_EST_ENT === 1 ? "Receptor" : null))
         }
         if (element.Tipo === 1) {
-          numeradorTrenes.onCambioEstadoSeñal(element.Id, element.SIG_IND > 1);
+          numeradorTrenes?.onCambioEstadoSeñal(element.Id, element.SIG_IND > 1);
         }
         if (existingIndex >= 0) {
           datosRemota[remota][existingIndex] = element;
@@ -204,11 +203,11 @@ wss.on("connection", (ws) => {
       //console.log(`➡️ Sending to MQTT: ${topic} ${payload}`);
       mqttClient.publish(topic, payload);
     } else if (data.type === "numerar") {
-      numeradorTrenes.asignarTrenManual(data.payload.Id, data.payload.Tren);
+      numeradorTrenes?.asignarTrenManual(data.payload.Id, data.payload.Tren);
     } else if (data.type === "mqtt") {
       mqttClient.publish(data.topic, data.payload);
     }
   });
-  numeradorTrenes.sendAll();
+  numeradorTrenes?.sendAll();
   mqttClient.publish("fec/CTC", JSON.stringify({ "Tipo": "PeticiónEstadoCompleto" }));
 });
