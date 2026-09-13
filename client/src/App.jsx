@@ -94,11 +94,12 @@ function App() {
           } else if (data.topic === "numerador") {
             const j = JSON.parse(data.payload);
             setNumerador(prevItems => {
+              const updated = { ...prevItems };
               j.forEach(cv => {
-                prevItems[cv.Id] = cv.Trenes;
-              })
-              return prevItems;
-            })
+                updated[cv.Id] = cv.Trenes;
+              });
+              return updated;
+            });
           }
         }
       };
@@ -478,11 +479,21 @@ function App() {
           </div>
         )}
         </div>
-        <ContadoresEjes columns={["CTL/S2","CTL/E1","TMB/S1","TMB/S2_1","TMB/E'1"]} onAction={(ceje, par) => {
+        {/*<ContadoresEjes columns={["CTL/S2","CTL/E1","TMB/S1","TMB/S2_1","TMB/E'1"]} onAction={(ceje, par) => {
           const msg = {
             type: "mqtt",
             topic: `cejes/${ceje}/event`,
             payload: par ? "Reverse" : "Nominal"
+          }
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify(msg));
+          }
+        }}/>*/}
+        <ContadoresEjes columns={["RFP/CV1A", "RFP/CV3A", "RFP/CVA6", "RFP/CVA4", "RFP/CV1", "RFP/CV3", "RFP/CVA2", "RFP/CVE'2", "PLE/CVE'1"]} onAction={(ceje, par) => {
+          const msg = {
+            type: "mqtt",
+            topic: `cv/${ceje}/field_state`,
+            payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
           }
           if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify(msg));

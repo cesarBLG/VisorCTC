@@ -84,7 +84,16 @@ const broadcastClients = (msg) => {
   });
 }
 
-const numeradorTrenes = null;// = new numerador(JSON.parse(fs.readFileSync(path.join(__dirname, "config/config.json"), "utf8")), broadcastClients)
+const cfgNumerador = [];
+for (const ence of ["RFP", "PLE", "BM"]) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, `config/config_${ence}.json`), "utf8"));
+    cfgNumerador.push(cfg);
+  } catch (err) {
+    console.error(`Error loading config_${ence}.json:`, err);
+  }
+}
+const numeradorTrenes = new numerador(cfgNumerador, broadcastClients)
 
 const onMqttError = () => {
   for (const key of Object.keys(datosRemota)) {
@@ -143,15 +152,24 @@ const handleMessage = (topic, message) => {
         const existingIndex = datosRemota[remota].findIndex(
           e => e.Id === element.Id && e.Tipo === element.Tipo
         );
-        if (element.Tipo === 4 || element.Tipo === 8) {
-          const isOcupado = (e) => {
-            return e.Tipo === 4 && /*e.CV_OCUP_TIPO === 0 && */e.CV_EST === 3 && e.CV_CEJES_PREN === 0;
-          }
-          const isReservado = (e) => {
-            return e.Tipo === 4 && e.CV_EST === 1;
-          }
+        if (element.Tipo === 4) {
+          const isOcupado = (e) => /*e.CV_OCUP_TIPO === 0 && */ e.CV_EST === 3 && e.CV_CEJES_PREN === 0;
+          const isReservado = (e) => e.CV_EST === 1 || e.CV_EST === 2;
+          numeradorTrenes?.onCambioEstadoCV(element.Id, isOcupado(element) ? "Ocupado" : "Libre");
           numeradorTrenes?.onCambioEstadoSeccion(element.Id, isOcupado(element) ? "Ocupado" : isReservado(element) ? "Reservado": "Libre");
         }
+        if (element.Tipo === 5) {
+          const isOcupado = (e) => e.CVA_EST === 1 && e.CVA_CEJES_PREN === 0;
+          numeradorTrenes?.onCambioEstadoCV(element.Id, isOcupado(element) ? "Ocupado" : "Libre");
+        }
+        if (element.Tipo === 8) {
+          const isOcupado = (e) => e.AG_EST === 3;
+          const isReservado = (e) => e.AG_EST === 1 || e.AG_EST === 2;
+          numeradorTrenes?.onCambioEstadoAguja(element.Id, isOcupado(element) ? "Ocupado" : isReservado(element) ? "Reservado": "Libre", element.AG_DIR === 2 ? "-" : (element.AG_DIR === 1 ? "+" : null));
+        }
+        /*if (element.Tipo === 8) {
+          numeradorTrenes?.onCambioEstadoAguja(element.Id, )
+        }*/
         if (element.Tipo === 14) {
           numeradorTrenes?.onCambioBloqueo(element.Id, (element.BLQ_EST_SAL === 1 || element.BLQ_EST_SAL === 2) ? "Emisor" : (element.BLQ_EST_ENT === 1 ? "Receptor" : null))
         }

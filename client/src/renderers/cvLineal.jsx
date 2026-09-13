@@ -28,7 +28,7 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
   let gNumerador = comp.querySelector('[inkscape\\:label="numerador"]');
   if (!gNumerador) {
     gNumerador = document.createElementNS('http://www.w3.org/2000/svg', "g");
-    gNumerador.setAttributeNS("http://www.inkscape.org/namespaces/inkscape", "inkscape:label", "numerador");
+    gNumerador.setAttribute("inkscape:label", "numerador");
 
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', centerX-30);
@@ -55,10 +55,12 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
   text.setAttribute("fill", color);
   const trenes = numerador[`${el.Estación}:${el.Id}`];
   if (trenes && trenes.length > 0) {
+    if (el.Estación+":"+el.Id === "RFP:CV1") console.log("SHOW "+el.Estación+":"+el.Id);
     text.textContent = trenes[0].Id;
     if (trenes.length > 1) text.textContent = text.textContent + "+" + trenes[1].Id;
     rect.style.visibility = 'visible';
   } else {
+    if (el.Estación+":"+el.Id === "RFP:CV1") console.log("HIDE "+el.Estación+":"+el.Id);
     text.textContent = "";
     rect.style.visibility = 'hidden';
   }

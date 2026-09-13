@@ -4,46 +4,88 @@ const oppLado = (lado) => {
     return lado;
 }
 class numerador {
-    constructor(topologyJson, broadcastClients) {
+    constructor(topologyJsons, broadcastClients) {
         this.secciones = {}
+        this.cvs = {}
         this.trenes = {}
         this.bloqueos = {}
         this.señales = {}
         this.contador = 0;
-
-        for (const [dep_id, dependencia] of Object.entries(topologyJson.Dependencias)) {
-            for (const [id, sec] of Object.entries(dependencia.Secciones)) {
-                const full_id = dep_id+":"+id;
-                //sec.id_remota = sec.Tipo === "Aguja" ? `${full_id},8` : `${full_id},4`;
-                if (sec.Tipo === "Aguja" && !sec.Conexiones) {
-                    sec.Conexiones = {};
-                    sec.Conexiones[sec.Lado] = sec.SeccionesTalón;
-                    sec.Conexiones[oppLado(sec.Lado)] = sec.SecciónPunta ? [sec.SecciónPunta] : [];
+        this.cvs_definidos = {};
+        for (const json of topologyJsons) {
+            for (const [dep_id, dependencia] of Object.entries(json.Dependencias)) {
+                if (!dependencia.Controlada) continue;
+                for (const [id, sec] of Object.entries(dependencia.Secciones)) {
+                    const full_id = dep_id+":"+id;
+                    if (sec.Tipo === "Aguja" && !sec.Conexiones) {
+                        sec.Conexiones = {};
+                        sec.Conexiones[sec.Lado] = sec.SeccionesTalón;
+                        sec.Conexiones[oppLado(sec.Lado)] = sec.SecciónPunta ? [sec.SecciónPunta] : [];
+                    }
+                    sec.Trenes = [];
+                    sec.TrenReservado = null;
+                    this.secciones[full_id] = sec;
                 }
-                sec.Trenes = [];
-                this.secciones[full_id] = sec;
+                for (const blq of dependencia.Bloqueos) {
+                    const full_id = dep_id+":"+blq.Colateral;
+                    this.bloqueos[full_id] = blq;
+                }
+                for (const [id, sig] of Object.entries(dependencia.Señales)) {
+                    const full_id = dep_id+":"+id;
+                    const sec = this.secciones[sig.Sección];
+                    if (!sec) continue;
+                    if (!sig.Pin) sig.Pin = 0;
+                    if (!sec.Señales) sec.Señales = {Impar: [], Par: []};
+                    while (sec.Señales[sig.Lado].length <= sig.Pin) {
+                        sec.Señales[sig.Lado].push(null);
+                    }
+                    sec.Señales[sig.Lado][sig.Pin] = full_id;
+                    this.señales[full_id] = sig;
+                }
+                for (const [id, cv] of Object.entries(dependencia.CVs)) {
+                    const full_id = dep_id+":"+id;
+                    this.cvs_definidos[full_id] = cv;
+                }
             }
-            for (const blq of dependencia.Bloqueos) {
-                const full_id = dep_id+":"+blq.Colateral;
-                this.bloqueos[full_id] = blq;
-            }
-            for (const [id, sig] of Object.entries(dependencia.Señales)) {
-                const full_id = dep_id+":"+id;
-                const sec = this.secciones[sig.Sección];
-                if (!sec) continue;
-                if (!sec.Señales) sec.Señales = {};
-                sec.Señales[sig.Lado] = full_id;
-                this.señales[full_id] = sig;
+        }
+        for (const [id, sec] of Object.entries(this.secciones)) {
+            const id_cv = this.getIdCV(id, sec);
+            if (!id_cv) continue;
+            if (!this.cvs[id_cv]) this.cvs[id_cv] = {Conexiones: {Par: [], Impar: []}, Trenes: [], Secciones: [], Id: id_cv};
+            this.cvs[id_cv].Secciones.push(id);
+            for (const lado of ["Impar", "Par"]) {
+                for (const conex of sec.Conexiones[lado]) {
+                    const id_cv2 = this.getIdCV(conex.Id);
+                    if (!id_cv2) {
+
+                    } else if (id_cv !== id_cv2) {
+                        this.cvs[id_cv].Conexiones[lado].push({...conex, IdPropio: id, IdCV: id_cv2});
+                    }
+                }
             }
         }
         this.broadcastClients = broadcastClients;
+    }
+    getIdCV(idSeccion) {
+        const sec = this.secciones[idSeccion];
+        if (!sec)
+            return null;
+        let id_cv = idSeccion;
+        if (sec.CV)
+            id_cv = sec.CV;
+        if (this.cvs_definidos[id_cv])
+            return id_cv;
+        return null;
     }
     send(idSecciones) {
         if (!idSecciones || idSecciones.length === 0) return;
         const list = [];
         for (const idSeccion of idSecciones) {
             const sec = this.secciones[idSeccion];
-            const trenes = [...sec.Trenes];
+            const trenes = [];
+            const cv = this.cvs[this.getIdCV(idSeccion)];
+            if (cv)
+                trenes.push(...cv.Trenes);
             if (sec.TrenReservado) trenes.push(sec.TrenReservado);
             list.push({Id: idSeccion, Trenes: trenes});
         }
@@ -59,28 +101,59 @@ class numerador {
     idDesconocido() {
         return "*"+this.contador++;
     }
-    asignarTrenManual(idSeccion, idTren) {
+    asignarTrenManual(idCV, idTren) {
         this.borrarTrenManual(idTren);
-        const sec = this.secciones[idSeccion];
-        if (!sec) return;
-        sec.Trenes = [{Id: idTren}];
-        this.trenes[idTren] = [idSeccion];
-        this.send([idSeccion]);
+        const cv = this.cvs[idCV];
+        if (!cv) return;
+        for (const tren of cv.Trenes) {
+            const tren2 = this.trenes[tren.Id];
+            if (!tren2) continue;
+            for (const idSeccion of tren2.Reserva) {
+                const sec = this.secciones[idSeccion];
+                if (!sec) continue;
+                if (sec.TrenReservado && sec.TrenReservado.Id === tren.Id) {
+                    sec.TrenReservado = undefined;
+                }
+            }
+            tren2.Reserva = [];
+        }
+        cv.Trenes = [{Id: idTren}];
+        this.trenes[idTren] = {Ocupado: [idCV], Reserva: []};
+        let changed = new Set(cv.Secciones);
+        for (const lado of ["Impar", "Par"]) {
+            for (const sig of cv.Conexiones[lado]) {
+                const sec = this.secciones[sig.Id];
+                if (!sec) continue;
+                changed = new Set([...changed, ...this.onCambioReservaSeccion(sig.Id)]);
+            }
+        }
+        this.send(changed);
     }
     borrarTrenManual(idTren) {
         const tren = this.trenes[idTren];
         if (!tren) return;
         const newId = this.idDesconocido();
-        for (const idSeccion of tren) {
-            for (const trenSeccion of this.secciones[idSeccion]) {
-                if (trenSeccion.Id == idTren) trenSeccion.Id = newId;
+        let changed = new Set();
+        for (const idCV of tren.Ocupado) {
+            changed = new Set([...changed,...cv.Secciones]);
+            for (const trenCV of this.cvs[idCV].Trenes) {
+                if (trenCV.Id == idTren) trenCV.Id = newId;
             }
         }
-        this.send(this.trenes[idTren]);
+        for (const idSeccion of tren.Reserva) {
+            const sec = this.secciones[idSeccion];
+            if (!sec) continue;
+            if (sec.TrenReservado && sec.TrenReservado.Id === idTren) {
+                sec.TrenReservado.Id = newId;
+                changed.add(idSeccion);
+            }
+        }
         this.trenes[idTren] = undefined;
         this.trenes[newId] = tren;
+        this.send(changed);
         return newId;
     }
+    // Indica el lado en el que está reservada una sección, independientemente de si está reservada para un tren o libre
     seccionIsReservada(idSeccion) {
         const sec = this.secciones[idSeccion];
         if (!sec) return null;
@@ -92,92 +165,103 @@ class numerador {
                 let currentId = idSeccion;
                 let currentLado = lado;
                 while (currentId) {
+                    const sec2 = this.secciones[currentId];
+                    if (!sec2 || sec2.Estado !== "Reservado") break;
                     const sig = this.siguienteSeccion(currentId, currentLado, true);
                     if (!sig) break;
-                    const sec2 = this.secciones[sig.Id];
-                    if (!sec2 || !sec2.Estado === "Reservado") break;
+                    if (sec2.Señales) {
+                        let forbid = false;
+                        for (const idSeñal of sec2.Señales[currentLado]) {
+                            const señal = this.señales[idSeñal];
+                            if (señal && señal.Abierta) {
+                                forbid = true;
+                                break;
+                            }
+                        }
+                        if (forbid) break;
+                        for (const idSeñal of sec2.Señales[oppLado(currentLado)]) {
+                            const señal = this.señales[idSeñal];
+                            if (señal && señal.Abierta) return oppLado(lado);
+                            else if (señal) forbid = true;
+                        }
+                        if (forbid) break;
+                    }
                     currentId = sig.Id;
                     currentLado = sig.InvertirParidad ? oppLado(lado) : lado;
-                    if (sec2.Señales) {
-                        if (sec2.Señales[currentLado]) break;
-                        const señal = this.señales[sec2.Señales[oppLado(currentLado)]];
-                        if (señal && señal.Abierta) return oppLado(lado);
-                        else if (señal) break;
-                    }
-                    break;
                 }
             }
+            return null;
         }
-        return null;
     }
     siguienteSeccion(idSeccion, lado, reserva) {
         const sec = this.secciones[idSeccion];
         const sigs = sec.Conexiones[lado];
-        if (sigs && sigs.length > 0) {
-            return sigs[0];
+        let pin = 0;
+        if (sec.Posición === "-" && sec.Lado === lado)
+            pin = 1;
+        if (sigs && sigs.length > pin && pin >= 0) {
+            return sigs[pin];
         }
         return null;
+    }
+    getPin(idSeccion, idSigSeccion, lado) {
+        const sec = this.secciones[idSeccion];
+        if (!sec) return -1;
+        if (!idSigSeccion && sec.Conexiones[lado].length == 1) return 0;
+        for (const [pin, conex] of sec.Conexiones[lado].entries()) {
+            if (conex.Id === idSigSeccion) return pin;
+        }
+        return -1;
     }
     onCambioEstadoSeñal(idSeñal, abierta) {
         const sig = this.señales[idSeñal];
         if (!sig) return;
         sig.Abierta = abierta;
+        const sec = this.secciones[sig.Sección];
+        this.send(this.onCambioReservaSeccion(sig.Sección))
     }
-    onCambioReservaSeccion(idSeccion, estado) {
+    onCambioReservaSeccion(idSeccion) {
         const sec = this.secciones[idSeccion];
-        const prevTren = sec.TrenReservado;
         if (!sec) return [];
-        const lado = estado === "Reservado" ? this.seccionIsReservada(idSeccion) : "";
-        let changed = []
-        if (lado && !sec.TrenReservado) {
-            for (let sig of sec.Conexiones[oppLado(lado)]) {
-                const sec2 = this.secciones[sig.Id];
-                if (!sec2) continue;
-                // TODO: comprobar if sec es accesible desde sec2
-                if (sec2.Estado === "Ocupado") {
-                    if (sec2.Trenes.length > 0) {
-                        let tren = lado === "Impar" ? sec2.Trenes[0] : sec2.Trenes[sec2.Trenes.length-1];
-                        tren = {Id: tren.Id, Sentido: lado};
-                        sec.TrenReservado = tren;
-                        console.log(idSeccion+" reservada para "+tren.Id);
-                        break;
-                    }
-                } else if (sec2.Estado === "Reservado") {
-                    if (sec2.TrenReservado && this.seccionIsReservada(sig.Id) === (sig.InvertirParidad ? oppLado(lado) : lado)) {
-                        let tren = sec2.TrenReservado;
-                        tren = {Id: tren.Id, Sentido: lado};
-                        sec.TrenReservado = tren;
-                        console.log(idSeccion+" reservada para "+tren.Id);
-                        break;
-                    }
+        let lado = sec.Estado === "Reservado" ? this.seccionIsReservada(idSeccion) : null;
+        let changed = new Set();
+        let tren = null;
+        if (lado) {
+            let sig = this.siguienteSeccion(idSeccion, oppLado(lado), true);
+            if (!sig) return [];
+            const sec2 = this.secciones[sig.Id];
+            if (!sec2) return [];
+            const cv = this.cvs[this.getIdCV(sig.Id)];
+            if (cv && cv.Estado === "Ocupado") {
+                const cv2 = this.cvs[this.getIdCV(sig.Id)];
+                if (cv2.Trenes.length > 0) {
+                    tren = lado === "Impar" ? cv2.Trenes[0] : cv2.Trenes[cv2.Trenes.length-1];
+                    tren = {Id: tren.Id, Sentido: lado};
+                }
+            } else if (sec2.Estado === "Reservado") {
+                if (sec2.TrenReservado && this.seccionIsReservada(sig.Id) === (sig.InvertirParidad ? oppLado(lado) : lado)) {
+                    tren = sec2.TrenReservado;
+                    tren = {Id: tren.Id, Sentido: lado};
                 }
             }
-            if (sec.TrenReservado) {
-                let currentId = idSeccion;
-                let currentLado = lado;
-                while (currentId) {
-                    const sig = this.siguienteSeccion(currentId, currentLado, true);
-                    if (!sig) break;
-                    currentId = sig.Id;
-                    currentLado = sig.InvertirParidad ? oppLado(lado) : lado;
-                    const sec2 = this.secciones[currentId];
-                    if (sec2.Estado === "Reservado" && this.seccionIsReservada(sig.Id) === currentLado) {
-                        sec2.TrenReservado = {Id: sec.TrenReservado.Id, Sentido: currentLado};
-                        console.log(currentId+" reservada para "+sec2.TrenReservado.Id);
-                        changed.push(currentId);
-                    } else {
-                        break;
-                    }
-                }
-            }
-        } else if (!lado && sec.TrenReservado) {
-            if (estado === "Reservado") return []
-            console.log(idSeccion+" reserva finalizada para "+sec.TrenReservado)
-            sec.TrenReservado = undefined;
-        } else {
-            return []
         }
-        changed.push(idSeccion);
+        if (!sec.TrenReservado && !tren) return [];
+        if (sec.TrenReservado && tren && sec.TrenReservado.Id === tren.Id) return [];
+        if (sec.TrenReservado) {
+            lado = sec.TrenReservado.Sentido;
+            console.log(idSeccion+" reserva finalizada para "+sec.TrenReservado.Id);
+            this.trenes[sec.TrenReservado.Id].Reserva = this.trenes[sec.TrenReservado.Id].Reserva.filter(function(s) { return s != idSeccion; });
+            sec.TrenReservado = undefined;
+        }
+        if (tren) {
+            sec.TrenReservado = tren;
+            this.trenes[tren.Id].Reserva.push(idSeccion);
+            console.log(idSeccion+" reservada para "+tren.Id);
+        }
+        for (const sig of sec.Conexiones[lado]) {
+            changed = new Set([...changed, ...this.onCambioReservaSeccion(sig.Id)]);
+        }
+        changed.add(idSeccion);
         return changed;
     }
     onCambioBloqueo(idBloqueo, estado) {
@@ -194,21 +278,28 @@ class numerador {
         let changed = new Set();
         for (const [id, sec] of Object.entries(this.secciones)) {
             if (sec.Bloqueo === idBloqueo && sec.Estado === "Reservado") {
-                changed = new Set([...changed, ...this.onCambioReservaSeccion(id, sec.Estado)])
+                changed = new Set([...changed, ...this.onCambioReservaSeccion(id)])
             }
         }
         this.send([...changed]);
     }
-    onCambioEstadoAguja(idAguja, ocupadaNormal, ocupadaInvertida, reservadaNormal, reservadaInvertida) {
-
+    onCambioEstadoAguja(idAguja, estado, dir) {
+        const sec = this.secciones[idAguja];
+        if (!sec || !sec.Tipo == "Aguja") return;
+        sec.Posición = dir;
+        this.onCambioEstadoSeccion(idAguja, estado);
     }
-    onCambioEstadoSeccion(idSeccion, estado) {
-        const sec = this.secciones[idSeccion];
-        if (!sec) return;
-        if (sec.Estado === estado) return;
-        let changed = new Set();
+    onCambioEstadoCV(idCV, estado) {
+        const cv = this.cvs[idCV];
+        if (!cv) return;
+        if (cv.Estado === estado) return;
+        let changedCV = new Set();
         if (estado === "Ocupado") {
-            const prioridad = (tren, sentidoReservado) => {
+            const prioridad = (tren) => {
+                let sentidoReservado = null;
+                if (tren.Conexión) {
+                    sentidoReservado = this.seccionIsReservada(tren.Conexión.IdPropio);
+                }
                 if (tren.SentidoAnterior === tren.Sentido) {
                     if (sentidoReservado === tren.Sentido) return 8;
                     else if (sentidoReservado) return 2;
@@ -225,18 +316,18 @@ class numerador {
             }
             let candidatos = []
             for (let lado of ["Impar", "Par"]) {
-                for (let sig of sec.Conexiones[lado]) {
-                    const sec2 = this.secciones[sig.Id];
-                    // TODO: comprobar if sec es accesible desde sec2
-                    if (sec2 && sec2.Trenes.length > 0) {
+                for (let sig of cv.Conexiones[lado]) {
+                    const cv2 = this.cvs[sig.IdCV];
+                    // TODO: comprobar if cv es accesible desde cv2
+                    if (cv2 && cv2.Trenes.length > 0) {
                         const lado2 = sig.InvertirParidad ? oppLado(lado) : lado;
-                        const tren2 = lado2 === "Par" ? sec2.Trenes[0] : sec2.Trenes[sec2.Trenes.length-1];
+                        const tren2 = lado2 === "Par" ? cv2.Trenes[0] : cv2.Trenes[cv2.Trenes.length-1];
                         candidatos.push({
                             Id: tren2.Id,
                             SentidoAnterior: sig.InvertirParidad ? oppLado(tren2.Sentido) : tren2.Sentido,
                             Sentido: oppLado(lado),
-                            Sección: sig.Id,
-                            Index: lado2 === "Par" ? 0 : sec2.Trenes.length-1,
+                            Conexión: sig,
+                            Index: lado2 === "Par" ? 0 : cv2.Trenes.length-1,
                         });
                     }
                 }
@@ -246,7 +337,7 @@ class numerador {
             let maxPrioridad = -1;
             let varios = false;
             for (const candidato of candidatos) {
-                const p = prioridad(candidato, this.seccionIsReservada(idSeccion));
+                const p = prioridad(candidato);
                 if (p > maxPrioridad) {
                     maxPrioridad = p;
                     tren = candidato;
@@ -258,41 +349,41 @@ class numerador {
 
             if (!tren || varios || maxPrioridad < 0) tren = {Id: this.idDesconocido()}
 
-            if (tren.Sentido === "Par") sec.Trenes.unshift(tren);
-            else sec.Trenes.push(tren);
-            if (!this.trenes[tren.Id]) this.trenes[tren.Id] = [];
-            this.trenes[tren.Id].push(idSeccion);
-            if (tren.Sección) {
-                const sec2 = this.secciones[tren.Sección];
-                if (sec2.Trenes.length > 1) {
-                    sec2.Trenes.splice(tren.Index, 1);
-                    changed.add(tren.Sección);
-                    this.trenes[tren.Id] = this.trenes[tren.Id].filter(function(s) { return s != tren.Sección; });
+            if (tren.Sentido === "Par") cv.Trenes.unshift(tren);
+            else cv.Trenes.push(tren);
+            if (!this.trenes[tren.Id]) this.trenes[tren.Id] = {Ocupado: [], Reserva: []};
+            this.trenes[tren.Id].Ocupado.push(idCV);
+            if (tren.Conexión) {
+                const cv2 = this.cvs[tren.Conexión.IdCV];
+                if (cv2.Trenes.length > 1) {
+                    cv2.Trenes.splice(tren.Index, 1);
+                    changedCV.add(tren.Conexión.IdCV);
+                    this.trenes[tren.Id].Ocupado = this.trenes[tren.Id].Ocupado.filter(function(s) { return s != tren.Conexión.IdCV; });
                 }
-                tren.Sección = undefined;
+                tren.Conexión = undefined;
                 tren.Index = undefined;
             }
             tren.SentidoAnterior = undefined;
-            console.log("tren "+tren.Id+" en "+idSeccion);
-            changed.add(idSeccion);
+            console.log("tren "+tren.Id+" en "+idCV);
+            changedCV.add(idCV);
         } else if (estado !== "Ocupado") {
-            const prevOcupado = sec.Trenes.length > 0;
-            if (prevOcupado) changed.add(idSeccion);
-            while (sec.Trenes.length > 0) {
+            const prevOcupado = cv.Trenes.length > 0;
+            if (prevOcupado) changedCV.add(idCV);
+            while (cv.Trenes.length > 0) {
                 let ladoEliminar = null;
-                let nuevaSeccion = null;
+                let nuevoCV = null;
                 let nuevoLado = null;
-                let trenes = {Impar: sec.Trenes[0], Par: sec.Trenes[sec.Trenes.length-1]};
+                let trenes = {Impar: cv.Trenes[0], Par: cv.Trenes[cv.Trenes.length-1]};
                 // Si ya está en otra sección, simplemente eliminar
                 for (const lado of ["Impar", "Par"]) {
-                    for (let sig of sec.Conexiones[lado]) {
-                        const sec2 = this.secciones[sig.Id];
-                        if (!sec2 || sec2.Estado !== "Ocupado") continue;
-                        if (sec2.Trenes.findIndex(t => t.Id == trenes.Impar.Id) >= 0) {
+                    for (let sig of cv.Conexiones[lado]) {
+                        const cv2 = this.cvs[sig.IdCV];
+                        if (!cv2 || cv2.Estado !== "Ocupado") continue;
+                        if (cv2.Trenes.findIndex(t => t.Id == trenes.Impar.Id) >= 0) {
                             ladoEliminar = "Impar";
                             break;
                         }
-                        if (sec2.Trenes.findIndex(t => t.Id == trenes.Par.Id) >= 0) {
+                        if (cv2.Trenes.findIndex(t => t.Id == trenes.Par.Id) >= 0) {
                             ladoEliminar = "Par";
                             break;
                         }
@@ -302,84 +393,93 @@ class numerador {
                 if (!ladoEliminar) {
                     // Comprobar sentido de circulación
                     for (const lado of ["Impar", "Par"]) {
-                        let sig = this.siguienteSeccion(idSeccion, lado, false);
+                        /*let sig = this.siguienteSeccion(idSeccion, lado, false);
                         if (!sig) continue;
                         const sec2 = this.secciones[sig.Id];
-                        if (!sec2 || sec2.Estado !== "Ocupado") continue;
-                        if (trenes[lado].Sentido === lado) {
-                            ladoEliminar = lado;
-                            nuevoLado = sig.InvertirParidad ? oppLado(lado) : lado;
-                            nuevaSeccion = sig.Id;
-                            break;
+                        if (!sec2 || sec2.Estado !== "Ocupado") continue;*/
+                        for (const sig of cv.Conexiones[lado]) {
+                            // TODO: comprobar si sig.Id es accesible desde sig.IdPropio
+                            const cv2 = this.cvs[sig.IdCV];
+                            if (!cv2 || cv2.Estado !== "Ocupado") continue;
+                            const sec2 = this.secciones[sig.Id];
+                            if (!sec2 || sec2.Estado !== "Ocupado") continue;
+                            if (trenes[lado].Sentido === lado) {
+                                ladoEliminar = lado;
+                                nuevoLado = sig.InvertirParidad ? oppLado(lado) : lado;
+                                nuevoCV = sig.IdCV;
+                                break;
+                            }
                         }
+                        if (ladoEliminar) break;
                     }
                 }
                 if (!ladoEliminar) {
                     for (let lado of ["Impar", "Par"]) {
-                        let sig = this.siguienteSeccion(idSeccion, lado, false);
+                        /*let sig = this.siguienteSeccion(idSeccion, lado, false);
                         if (!sig) continue;
                         const sec2 = this.secciones[sig.Id];
-                        if (!sec2 || sec2.Estado !== "Ocupado") continue;
-                        nuevoLado = sig.InvertirParidad ? oppLado(lado) : lado;
-                        nuevaSeccion = sig.Id;
-                        ladoEliminar = lado;
-                        break;
+                        if (!sec2 || sec2.Estado !== "Ocupado") continue;*/
+                        for (const sig of cv.Conexiones[lado]) {
+                            // TODO: comprobar si sig.Id es accesible desde sig.IdPropio
+                            const cv2 = this.cvs[sig.IdCV];
+                            if (!cv2 || cv2.Estado !== "Ocupado") continue;
+                            const sec2 = this.secciones[sig.Id];
+                            if (!sec2 || sec2.Estado !== "Ocupado") continue;
+                            nuevoLado = sig.InvertirParidad ? oppLado(lado) : lado;
+                            nuevoCV = sig.IdCV;
+                            ladoEliminar = lado;
+                            break;
+                        }
+                        if (ladoEliminar) break;
                     }
                 }
                 if (!ladoEliminar) {
-                    for (const tren of sec.Trenes) {
-                        this.trenes[tren.Id] = this.trenes[tren.Id].filter(function(s) { return s != idSeccion; });
+                    for (const tren of cv.Trenes) {
+                        this.trenes[tren.Id].Ocupado = this.trenes[tren.Id].Ocupado.filter(function(s) { return s != idCV; });
                     }
-                    sec.Trenes = [];
-                    console.log(idSeccion+" libre de trenes");
+                    cv.Trenes = [];
+                    console.log(idCV+" libre de trenes");
                     break;
                 }
-                const tren = ladoEliminar === "Impar" ? sec.Trenes[0] : sec.Trenes[sec.Trenes.length-1];
-                sec.Trenes.splice(ladoEliminar === "Impar" ? 0 : sec.Trenes.length-1, 1);
-                this.trenes[tren.Id] = this.trenes[tren.Id].filter(function(s) { return s != idSeccion; });
-                if (nuevaSeccion) {
+                const tren = ladoEliminar === "Impar" ? cv.Trenes[0] : cv.Trenes[cv.Trenes.length-1];
+                cv.Trenes.splice(ladoEliminar === "Impar" ? 0 : cv.Trenes.length-1, 1);
+                this.trenes[tren.Id].Ocupado = this.trenes[tren.Id].Ocupado.filter(function(s) { return s != idCV; });
+                if (nuevoCV) {
                     tren.Sentido = oppLado(nuevoLado);
-                    const sec2 = this.secciones[nuevaSeccion];
-                    if (nuevoLado === "Impar") sec2.Trenes.push(tren);
-                    else sec2.Trenes.unshift(tren);
-                    this.trenes[tren.Id].push(nuevaSeccion);
-                    changed.add(nuevaSeccion);
-                    console.log("tren "+tren.Id+" de "+idSeccion+" a "+nuevaSeccion);
+                    const cv2 = this.cvs[nuevoCV];
+                    if (nuevoLado === "Impar") cv2.Trenes.push(tren);
+                    else cv2.Trenes.unshift(tren);
+                    this.trenes[tren.Id].Ocupado.push(nuevoCV);
+                    changedCV.add(nuevoCV);
+                    console.log("tren "+tren.Id+" de "+idCV+" a "+nuevoCV);
                 } else {
-                    console.log("tren "+tren.Id+" libera "+idSeccion);
-                }
-            }
-            if (prevOcupado) {
-                for (const lado of ["Impar", "Par"]) {
-                    let currentId = idSeccion;
-                    let currentLado = lado;
-                    while (currentId) {
-                        const sig = this.siguienteSeccion(currentId, currentLado, true);
-                        if (!sig) break;
-                        const sec2 = this.secciones[sig.Id]; 
-                        if (!sec2 || !sec2.Estado === "Reservado" || !sec2.TrenReservado) break;
-                        currentId = sig.Id;
-                        currentLado = sig.InvertirParidad ? oppLado(lado) : lado;
-                        if (currentLado != sec2.TrenReservado.Sentido) break;
-                        console.log(currentId+" reserva finalizada para "+sec2.TrenReservado)
-                        sec2.TrenReservado = undefined;
-                        changed.add(sig.Id);
-                    }
+                    console.log("tren "+tren.Id+" libera "+idCV);
                 }
             }
         }
-        changed = new Set([...changed, ...this.onCambioReservaSeccion(idSeccion, estado)])
-        sec.Estado = estado;
-        if (estado === "Ocupado") {
-            for (let lado of ["Impar", "Par"]) {
-                const sig = this.siguienteSeccion(idSeccion, lado, false);
-                if (!sig) continue
-                const sec2 = this.secciones[sig.Id];
-                if (!sec2) continue;
-                changed = new Set([...changed, ...this.onCambioReservaSeccion(sig.Id, sec2.Estado)]);
+        cv.Estado = estado;
+        let changed = new Set()
+        for (const idCV2 of changedCV) {
+            const cv2 = this.cvs[idCV2];
+            if (!cv2) continue;
+            for (const idSec2 of cv2.Secciones) {
+                changed.add(idSec2);
             }
         }
+
+        for (const lado of ["Impar", "Par"]) {
+            for (const sig of cv.Conexiones[lado]) {
+                changed = new Set([...changed, ...this.onCambioReservaSeccion(sig.Id)]);
+            }
+        }
+
         this.send([...changed]);
+    }
+    onCambioEstadoSeccion(idSeccion, estado) {
+        const sec = this.secciones[idSeccion];
+        if (!sec) return;
+        sec.Estado = estado;
+        this.send(this.onCambioReservaSeccion(idSeccion));
     }
 }
 export default numerador
