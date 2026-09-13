@@ -157,41 +157,56 @@ class numerador {
     seccionIsReservada(idSeccion) {
         const sec = this.secciones[idSeccion];
         if (!sec) return null;
+        if (sec.Estado !== "Reservado") {
+            sec.LadoReserva = null;
+            return null;
+        }
+        let ladoReserva = null;
         const blq = this.bloqueos[sec.Bloqueo];
         if (blq) {
-            return blq.Estado;
+            ladoReserva = blq.Estado;
         } else {
             for (const lado of ["Impar", "Par"]) {
                 let currentId = idSeccion;
                 let currentLado = lado;
                 while (currentId) {
+                    if (idSeccion === "RFP:CV1" && lado === "Par") console.log(currentId+" "+sec.LadoReserva);
                     const sec2 = this.secciones[currentId];
                     if (!sec2 || sec2.Estado !== "Reservado") break;
                     const sig = this.siguienteSeccion(currentId, currentLado, true);
                     if (!sig) break;
+                    const pin = this.getPin(currentId, sig.Id, currentLado);
                     if (sec2.Señales) {
-                        let forbid = false;
+                        let stop = false;
                         for (const idSeñal of sec2.Señales[currentLado]) {
                             const señal = this.señales[idSeñal];
                             if (señal && señal.Abierta) {
-                                forbid = true;
+                                stop = true;
+                                if (sec.LadoReserva === oppLado(currentLado)) sec.LadoReserva = null;
                                 break;
                             }
                         }
-                        if (forbid) break;
-                        for (const idSeñal of sec2.Señales[oppLado(currentLado)]) {
+                        if (stop) break;
+                        for (const [index,idSeñal] of sec2.Señales[oppLado(currentLado)].entries()) {
                             const señal = this.señales[idSeñal];
-                            if (señal && señal.Abierta) return oppLado(lado);
-                            else if (señal) forbid = true;
+                            if (señal && señal.Abierta) {
+                                ladoReserva = oppLado(currentLado);
+                                stop = true;
+                                break;
+                            } else if (señal && pin === index) {
+                                stop = true;
+                            }
                         }
-                        if (forbid) break;
+                        if (stop) break;
                     }
                     currentId = sig.Id;
                     currentLado = sig.InvertirParidad ? oppLado(lado) : lado;
                 }
             }
-            return null;
+            if (!ladoReserva) ladoReserva = sec.LadoReserva;
         }
+        sec.LadoReserva = ladoReserva;
+        return ladoReserva;
     }
     siguienteSeccion(idSeccion, lado, reserva) {
         const sec = this.secciones[idSeccion];
@@ -223,7 +238,7 @@ class numerador {
     onCambioReservaSeccion(idSeccion) {
         const sec = this.secciones[idSeccion];
         if (!sec) return [];
-        let lado = sec.Estado === "Reservado" ? this.seccionIsReservada(idSeccion) : null;
+        let lado = this.seccionIsReservada(idSeccion);
         let changed = new Set();
         let tren = null;
         if (lado) {
