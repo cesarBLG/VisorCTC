@@ -55,12 +55,10 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
   text.setAttribute("fill", color);
   const trenes = numerador[`${el.Estación}:${el.Id}`];
   if (trenes && trenes.length > 0) {
-    if (el.Estación+":"+el.Id === "RFP:CV1") console.log("SHOW "+el.Estación+":"+el.Id);
     text.textContent = trenes[0].Id;
     if (trenes.length > 1) text.textContent = text.textContent + "+" + trenes[1].Id;
     rect.style.visibility = 'visible';
   } else {
-    if (el.Estación+":"+el.Id === "RFP:CV1") console.log("HIDE "+el.Estación+":"+el.Id);
     text.textContent = "";
     rect.style.visibility = 'hidden';
   }

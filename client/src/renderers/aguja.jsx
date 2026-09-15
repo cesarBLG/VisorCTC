@@ -69,28 +69,33 @@ export const renderAguja = (el, state, isBlinking) => {
   let bar_normal = null;
   let bar_inv = null;
   switch (est.AG_DES_N ?? 0) {
-    case 1:
-      bar_normal = ['#00f', true];
-      break;
     case 2:
-      bar_normal = ['#0f0', true];
+      bar_normal = ['#00f', false];
+      break;
+    case 1:
+      bar_normal = ['#0f0', false];
       break;
   }
   switch (est.AG_DES_I ?? 0) {
-    case 1:
-      bar_inv = ['#00f', true];
-      break;
     case 2:
-      bar_inv = ['#0f0', true];
+      bar_inv = ['#00f', false];
+      break;
+    case 1:
+      bar_inv = ['#0f0', false];
       break;
   }
-  if (bar_normal) bar_punta == bar_normal;
+  if (bar_normal) bar_punta = bar_normal;
   if (bar_inv && (!bar_normal || est.AG_DES_I > est.AG_DES_N)) bar_punta = bar_inv;
+  if (`${el.Estación}:${el.Id}` === "RFP:A2") console.log(JSON.stringify(bar_punta));
 
   function setDesliz(t, desliz) {
     if (!t) return;
     t.style.visibility = desliz && (!desliz[1] || isBlinking) ? 'visible' : 'hidden';
-    if (desliz) t.style.fill = desliz[0];
+    if (desliz) {
+      t.style.fill = desliz[0];
+      t.style.stroke = desliz[0];
+      t.style.strokeWidth = 2.5;
+    }
   }
   function setRegularTrackState(t, color='#ff0', blink=false, desliz=null) {
     if (!t) return;
@@ -107,9 +112,9 @@ export const renderAguja = (el, state, isBlinking) => {
   }
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t1a"]'), color_ocup, false, bar_punta);
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t3R"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, est.AG_COMP === 0 && est.AG_COMP === 1, bar_normal);
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3Ra"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, bar_normal)
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3Ra"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, false, bar_normal)
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t3L"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, est.AG_COMP === 0 || est.AG_COMP === 2, bar_inv)
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3La"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, bar_inv)
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3La"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, false, bar_inv)
 
   setDesliz(comp.querySelector('[inkscape\\:label="deslizLneg0"]'), bar_punta);
   setDesliz(comp.querySelector('[inkscape\\:label="deslizRpos0"]'), (!bar_inv || est.AG_COMP === 4) ? bar_punta : null)
