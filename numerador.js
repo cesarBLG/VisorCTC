@@ -199,8 +199,10 @@ class numerador {
                         }
                         if (stop) break;
                     }
+                    const cross = this.siguienteSeccion(sig.Id, sig.InvertirParidad ? currentLado : oppLado(currentLado), true);
+                    if (cross.Id !== currentId) break;
                     currentId = sig.Id;
-                    currentLado = sig.InvertirParidad ? oppLado(lado) : lado;
+                    currentLado = sig.InvertirParidad ? oppLado(currentLado) : currentLado;
                 }
             }
             if (!ladoReserva) ladoReserva = sec.LadoReserva;
