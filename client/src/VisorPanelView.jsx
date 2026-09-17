@@ -2,12 +2,66 @@ import { forwardRef, useImperativeHandle, useEffect, useState, useRef } from "re
 import ContadoresEjes from "./cejes";
 
 // Visualización de mandos especiales (se colorean en rojo en el menú contextual).
-const MANDOS_ESPECIALES = [
-  "DEI", "ABS", "DS", "ABDE", "ABD", "MAE", "ANE", "AIE", "EMA", "ABA",
-  "DIA", "AM", "AAM", "RTA", "MCE", "CCE", "CUE", "ABC", "DIC", "NSB",
-  "APB", "NB", "TME", "RM", "LD", "LN", "DCA", "LE", "ABV", "DIV",
-  "ABTV", "DTV", "LC", "AMLE",
-];
+const MANDOS_ESPECIALES = {
+  "U": "ITINERARIO ÚNICO",
+
+  "REU": "REBASE AUTORIZADO ESPECIAL PARA UIC",
+  "REC": "REBASE AUTORIZADO ESPECIAL PARA RC",
+  "RU": "REBASE ÚNICO",
+
+  "MEU": "MANIOBRA CENTRALIZADA ESPECIAL PARA UIC",
+  "MEC": "MANIOBRA CENTRALIZADA ESPECIAL PARA RC",
+  "MU": "MANIOBRA ÚNICA",
+
+  "DEI": "DISOLUCIÓN POR EMERGENCIA DE ITINERARIO",
+  "ABS": "ANULAR BLOQUEO DE SEÑAL",
+  "DS": "ANULAR BLOQUEO DE SEÑAL",
+  "ABDE": "ANULAR BLOQUEO DE DESTINO DE ENTRADA",
+  "ABD": "ANULAR BLOQUEO DE DESTINO",
+
+  "MAE": "MOVIMIENTO DE AGUJA POR EMERGENCIA",
+  "ANE": "AGUJA A POSICIÓN NORMAL POR EMERGENCIA",
+  "AIE": "AGUJA A POSICIÓN INVERTIDA POR EMERGENCIA",
+  "EMA": "MOVIMIENTO DE AGUJA POR EMERGENCIA",
+
+  "ABA": "ANULAR BLOQUEO DE AGUJA",
+  "DIA": "DESBLOQUEO DE ESTABLECIMIENTO DE ITINERARIO O MANIOBRA CENTRALIZADA POR AGUJA",
+  "AM": "AUTORIZACIÓN A MANTENIMIENTO",
+  "AAM": "ANULAR AUTORIZACIÓN DE AGUJA A MANTENIMIENTO",
+  "RTA": "RECONOCIMIENTO DE TALONAMIENTO DE AGUJA",
+
+  "MCE": "CAMBIADOR DE HILO A POSICIÓN CONTRARIA POR EMERGENCIA",
+  "CCE": "CAMBIADOR DE HILO A POSICIÓN PARA TRENES DE ANCHO RC POR EMERGENCIA",
+  "CUE": "CAMBIADOR DE HILO A POSICIÓN PARA TRENES DE ANCHO UIC POR EMERGENCIA",
+  "ABC": "ANULAR BLOQUEO DE CAMBIADOR DE HILO",
+  "DIC": "DESBLOQUEO DE ESTABLECIMIENTO DE ITINERARIO O MANIOBRA CENTRALIZADA POR CAMBIADOR DE HILO",
+
+  "NSB": "NORMALIZAR SEÑALES DE BLOQUEO",
+  "APB": "ANULAR PROHIBICIÓN DE BLOQUEO",
+  "ABE": "ANULAR ",
+  "DEDB": "ANULAR DESLIZAMIENTO DE BLOQUEO",
+  "NB": "NORMALIZACIÓN DE BLOQUEO",
+
+  "ABDS": "ANULAR BLOQUEO DE DESTINO DE SALIDA",
+  "TME": "TOMAR MANDO LOCAL POR EMERGENCIA",
+  "RM": "REARME DE MOTORES",
+  "LD": "LUZ DIA",
+  "LN": "LUZ NOCHE",
+
+  "DCA": "DESBLOQUEO DE MOVIMIENTO AUTOMÁTICO DE CONJUNTO DE AGUJAS POR ITINERARIO O MANIOBRA CENTRALIZADA",
+  "LE": "LIBERACIÓN DE ELEMENTO",
+
+  "ABV": "ANULAR BLOQUEO DE VÍA",
+  "DIV": "ANULAR BLOQUEO DE VÍA",
+  "ABTV": "ANULAR BLOQUEO DE CIRCUITO DE VÍA DE TRAYECTO",
+  "DTV": "ANULAR BLOQUEO DE CIRCUITO DE VÍA DE TRAYECTO",
+  "NPT": "NORMALIZAR PRESENCIA DE TREN",
+  "LC": "LIBERAR (PRENORMALIZAR) CANTÓN",
+
+  "AMLE": "ANULAR MANIOBRA LOCAL POR EMERGENCIA",
+  "CONMUTAR": "REARMAR CONMUTACIÓN DE CV Y CONTADORES DE EJES QUE HAY EN EL BLOQUEO",
+  "RC": "REARMAR CONMUTACIÓN DE CV Y CONTADORES DE EJES QUE HAY EN EL BLOQUEO"
+};
 
 // Cuadraditos de estado: colores primarios y secundarios puros.
 const STATUS_COLORS = [
@@ -256,6 +310,31 @@ const VisorPanelView = forwardRef(function VisorPanelView(
             Reset
           </button>
         </div>
+
+        {/* Aviso de ME pendiente (blanco sobre rojo, centrado) */}
+        {mePendiente !== "" && (
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 1000,
+              background: "#f00",
+              color: "#fff",
+              padding: "16px 28px",
+              borderRadius: 8,
+              fontSize: 18,
+              fontWeight: 600,
+              textAlign: "center",
+              maxWidth: "80vw",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.7)",
+            }}
+          >
+            {mePendiente.split(' ')[1]+ ": " + MANDOS_ESPECIALES[mePendiente.split(' ')[0]] || mePendiente}
+          </div>
+        )}
+
         <div
           ref={panelRef}
           className="panel"
@@ -361,7 +440,7 @@ const VisorPanelView = forwardRef(function VisorPanelView(
                   whiteSpace: "nowrap",
                   cursor: "pointer",
                   borderRadius: 3,
-                  color: MANDOS_ESPECIALES.includes(mando) ? '#f00' : '#fff',
+                  color: MANDOS_ESPECIALES[mando] ? '#f00' : '#fff',
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.12)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}

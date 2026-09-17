@@ -92,7 +92,7 @@ function App() {
               });
             } else if (j.Tipo === "RespuestaÓrdenes") {
               if (j.Mensaje.Respuesta === 1 && j.Mensaje.Rechazo === 0) {
-                setMePendiente(j.Mensaje.Comando.split(' ')[1]);
+                setMePendiente(j.Mensaje.Comando);
               }
             }
           } else if (data.topic === "numerador") {
@@ -211,7 +211,7 @@ function App() {
     if (mePendiente !== "") {
       const payload = {
         type: "mando",
-        message: "ME "+mePendiente,
+        message: "ME "+mePendiente.split(' ')[1],
       };
       setMePendiente("")
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -224,7 +224,7 @@ function App() {
     if (mePendiente !== "") {
       const payload = {
         type: "mando",
-        message: "BL "+mePendiente,
+        message: "BL "+mePendiente.split(' ')[1],
       };
       setMePendiente("")
       if (wsRef.current?.readyState === WebSocket.OPEN) {

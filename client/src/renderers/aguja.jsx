@@ -86,7 +86,11 @@ export const renderAguja = (el, state, isBlinking) => {
   }
   if (bar_normal) bar_punta = bar_normal;
   if (bar_inv && (!bar_normal || est.AG_DES_I > est.AG_DES_N)) bar_punta = bar_inv;
-  if (`${el.Estación}:${el.Id}` === "RFP:A2") console.log(JSON.stringify(bar_punta));
+  if (est.AG_EST === 1 || est.AG_EST === 2) bar_punta = bar_normal = bar_inv = null;
+  if (bar_inv && bar_normal) {
+    if (est.AG_COMP === 1 || est.AG_COMP === 3) bar_inv = null;
+    if (est.AG_COMP === 2 || est.AG_COMP === 4) bar_punta = null;
+  }
 
   function setDesliz(t, desliz) {
     if (!t) return;
