@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import VisorPanelView, { computeContextMenuPosition } from './VisorPanelView';
 import { renderCvLineal } from './renderers/cvLineal';
 import { renderAguja } from './renderers/aguja';
 import { renderSeñal } from './renderers/señal';
@@ -7,7 +8,6 @@ import { renderEstacion } from './renderers/estacion';
 import { renderIMV } from './renderers/imv';
 import { renderFMV } from './renderers/fmv';
 import { renderPN } from './renderers/pn';
-import ContadoresEjes from "./cejes";
 
 // Debug-only UI (contadores de ejes): shown only while running the dev server.
 const DEBUG_MODE = process.env.NODE_ENV === "development";
@@ -29,42 +29,7 @@ function App() {
   const wsRef = useRef(null);
   const panelRef = useRef(null);
   const layoutRef = useRef(null);
-
-  // ---- In-app zoom (independent of browser zoom) ----
-  const [zoom, setZoom] = useState(1);
-  const zoomRef = useRef(1);
-  const panelScrollRef = useRef(null);
-
-  const MIN_ZOOM = 0.25;
-  const MAX_ZOOM = 4;
-  const ZOOM_STEP = 0.2;
-
-  // Re-applies the layout width based on current window size and in-app zoom.
-  const applyLayoutSize = () => {
-    const el = layoutRef.current;
-    if (!el) return;
-    el.style.width = `${Math.round(window.innerWidth * (zoomRef.current || 1))}px`;
-  };
-
-  const changeZoom = (delta) => {
-    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(zoomRef.current + delta).toFixed(2)));
-    zoomRef.current = next;
-    setZoom(next);
-    applyLayoutSize();
-  };
-
-  const zoomBtnStyle = {
-    background: "#555",
-    color: "#fff",
-    border: "none",
-    borderRadius: 4,
-    padding: "2px 9px",
-    cursor: "pointer",
-    fontSize: 14,
-    lineHeight: 1.3,
-  };
-
-  const mandos_especiales = ["DEI","ABS","DS","ABDE","ABD","MAE","ANE","AIE","EMA","ABA","DIA","AM","AAM","RTA","MCE","CCE","CUE","ABC","DIC","NSB","APB","NB","TME","RM","LD","LN","DCA","LE","ABV","DIV","ABTV","DTV","LC","AMLE"];
+  const viewRef = useRef(null);
 
   const [isBlinking, setIsBlinking] = useState(false);
   useEffect(() => {
@@ -102,7 +67,7 @@ function App() {
           if (data.topic === "log") {
             const now = new Date();
             const time = now.toLocaleTimeString('es-ES')
-        
+
             setLog((prevLog) => {
               const newLog = [`[${time}] ${data.payload}`, ...prevLog];
               return newLog;
@@ -115,14 +80,14 @@ function App() {
               setState(prevItems => {
                 // Create a copy of the previous items to avoid mutating state directly
                 const updatedItems = { ...prevItems };
-          
+
                 // Loop through the new items array and update the state
                 newItems.forEach(newItem => {
                   const key = `${newItem.Id},${newItem.Tipo}`;
                   // Update or add the new item by key
                   updatedItems[key] = { ...newItem };
                 });
-          
+
                 return updatedItems;
               });
             } else if (j.Tipo === "RespuestaÓrdenes") {
@@ -198,22 +163,9 @@ function App() {
     e.preventDefault();
     if (!el.Mandos || el.Mandos.length === 0) return;
 
-    // Estimate menu size (you can tweak)
-    const menuWidth = 150;
-    const menuHeight = (el.Mandos?.length || 1) * 24 + 8;
-
-    // Use viewport coordinates and clamp so the menu never leaves the screen
-    let menuX = e.clientX;
-    let menuY = e.clientY;
-    if (menuX + menuWidth > window.innerWidth) menuX = Math.max(0, window.innerWidth - menuWidth - 5);
-    if (menuY + menuHeight > window.innerHeight) menuY = Math.max(0, window.innerHeight - menuHeight - 8);
-
-    setContextMenu({
-      visible: true,
-      x: menuX,
-      y: menuY,
-      element: el
-    });
+    // La posición del menú se calcula y ajusta en VisorPanelView.
+    const { x, y } = computeContextMenuPosition(e, el.Mandos);
+    setContextMenu({ visible: true, x, y, element: el });
   }
   const sendCommand = () => {
     if (!cmdText.trim()) return;
@@ -232,6 +184,7 @@ function App() {
     });
     setCmdText("");
   }
+
   // --- RIGHT CLICK HANDLER (send route) ---
   const handlePanelRightClick = (e) => {
     if (cmdText && cmdText !== "") {
@@ -242,6 +195,16 @@ function App() {
 
   const handleCancelButton = () => {
     setCmdText("");
+  };
+
+  // Selección de un mando del menú contextual.
+  const handleContextMenuOption = (el, mando) => {
+    setCmdText(() => {
+      let newCmd = [mando, el.Estación];
+      if (el.Tipo !== "Estación") newCmd.push(el.Id);
+      return newCmd.join(' ');
+    });
+    setContextMenu((prev) => ({ ...prev, visible: false }));
   };
 
   const handleME = () => {
@@ -270,6 +233,26 @@ function App() {
     }
   };
 
+  const handleNumerarOk = () => {
+    const payload = {
+      type: "numerar",
+      payload: {
+        Id: numeraTrenCv,
+        Tren: numeraTren
+      }
+    };
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(payload));
+    }
+    setNumeraTrenCv("");
+    setNumeraTren("");
+  };
+
+  const handleNumerarCancel = () => {
+    setNumeraTrenCv("");
+    setNumeraTren("");
+  };
+
   const renderElement = (el) => {
     switch (el.Tipo) {
       case "Señal":
@@ -295,13 +278,35 @@ function App() {
     Object.values(elements).forEach(comps => comps.forEach(renderElement));
   }, [elements, isBlinking, state]);
 
+  const handleCvAction = (ceje, par) => {
+    const msg = {
+      type: "mqtt",
+      topic: `cv/${ceje}/field_state`,
+      payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
+    };
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  };
+
+  const handleCejeAction = (ceje, par) => {
+    const msg = {
+      type: "mqtt",
+      topic: `cejes/${ceje}/event`,
+      payload: par ? "Reverse" : "Nominal"
+    };
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  };
+
   useEffect(() => {
     if (!panelRef.current) return;
 
     const handleClick = (event) => {
       // Detect click on any defined element
       const clickedElement = event.target.closest("g");
-      
+
       const contextMenuEl = document.getElementById("context-menu");
       if (contextMenuEl && contextMenuEl.contains(event.target)) {
         return;
@@ -315,22 +320,6 @@ function App() {
     }
     panelRef.current.addEventListener("click", handleClick);
 
-    // Re-fit the SVG width only on real window resizes. Browser page-zoom also
-    // fires "resize" while changing devicePixelRatio, so if the DPR changed we
-    // treat it as a zoom and leave the enlarged size alone (otherwise zooming in
-    // would be immediately undone).
-    let lastDpr = window.devicePixelRatio;
-    const handleResize = () => {
-      const dprChanged =
-        Math.round(window.devicePixelRatio * 100) !== Math.round(lastDpr * 100);
-      if (dprChanged || !layoutRef.current) {
-        lastDpr = window.devicePixelRatio;
-        return;
-      }
-      applyLayoutSize();
-    };
-    window.addEventListener("resize", handleResize);
-
     let cancelled = false;
     const components = {}
     fetch("/api/layout.svg")
@@ -339,7 +328,7 @@ function App() {
         if (cancelled) return;
         layoutRef.current.innerHTML = svgText;
         const svg = layoutRef.current.querySelector("svg");
-        
+
         svg.removeAttribute("width");
         svg.removeAttribute("height");
         svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
@@ -354,7 +343,7 @@ function App() {
         // zoom (so it never grows). Fixed pixels get multiplied by browser zoom,
         // Size to the current window width (x in-app zoom). Fixed pixels let
         // our own zoom enlarge it and produce internal scrollbars.
-        applyLayoutSize();
+        viewRef.current?.applyLayoutSize();
         const layerNames = ["Destino", "Señal", "Bloqueo", "Estación", "CV", "Aguja", "IMV", "FMV", "PN"]
         for (const i in layerNames) {
           const layerName = layerNames[i];
@@ -430,387 +419,40 @@ function App() {
           if (handlerc) g.removeEventListener("contextmenu", handlerc);
         });
       });
-      window.removeEventListener("resize", handleResize);
       if (panelRef.current) panelRef.current.removeEventListener("click", handleClick);
     };
   }, []);
 
-  // Use the mouse wheel for HORIZONTAL scrolling over the layout only.
-  useEffect(() => {
-    const el = panelScrollRef.current;
-    if (!el) return;
-    const handler = (e) => {
-      // Ctrl/Cmd + wheel -> zoom the layout in/out
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        changeZoom(Math.sign(e.deltaY) < 0 ? ZOOM_STEP : -ZOOM_STEP);
-        return;
-      }
-      // Shift + wheel -> vertical scroll over the panel
-      if (e.shiftKey) {
-        e.preventDefault();
-        el.scrollTop += e.deltaY || e.deltaX;
-        return;
-      }
-      // Plain wheel -> horizontal scroll over the layout
-      e.preventDefault();
-      el.scrollLeft += e.deltaY || e.deltaX;
-    };
-    el.addEventListener("wheel", handler, { passive: false });
-    return () => el.removeEventListener("wheel", handler);
-  }, []);
-
-  // --- UI ---
+  // --- UI (delegada al componente de visualización) ---
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100vw",
-        minHeight: "100vh",
-        boxSizing: "border-box",
-        background: "#000",
-        overflowX: "hidden",
-      }}
-    >
-      <div
-        id="panel-container"
-        ref={panelScrollRef}
-        style={{
-          flexGrow: 1,
-          display: "flex",
-          minHeight: "300px",
-          position: "relative",
-          overflow: "auto",
-          borderTop: "2px solid #555",
-        }}
-        onContextMenu={handlePanelRightClick}
-      >
-        <div
-          style={{
-            position: "fixed",
-            top: 10,
-            left: 12,
-            zIndex: 400,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "rgba(0,0,0,0.55)",
-            padding: "4px 8px",
-            borderRadius: 6,
-          }}
-        >
-          <button onClick={() => changeZoom(-ZOOM_STEP)} title="Alejar" style={zoomBtnStyle}>−</button>
-          <span style={{ color: "#fff", fontSize: 12, minWidth: 46, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => changeZoom(ZOOM_STEP)} title="Acercar" style={zoomBtnStyle}>+</button>
-          <button
-            onClick={() => { zoomRef.current = 1; setZoom(1); applyLayoutSize(); }}
-            title="Restablecer"
-            style={{ ...zoomBtnStyle, whiteSpace: "nowrap" }}
-          >
-            Reset
-          </button>
-        </div>
-        <div
-          ref={panelRef}
-          className="panel"
-          style={{ margin: "auto" }}
-        >
-          {numeraTrenCv && (
-            <div style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 300,
-              display: "flex",
-              justifyContent: "center",
-              pointerEvents: "none",
-            }}>
-              <div style={{
-                marginTop: 20,
-                background: "#1b1b1f",
-                border: "1px solid #555",
-                borderRadius: 8,
-                padding: 16,
-                minWidth: 280,
-                boxShadow: "0 6px 24px rgba(0,0,0,0.7)",
-                color: "#fff",
-                pointerEvents: "auto",
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>
-                  Número de tren en {numeraTrenCv}
-                </div>
-                <input
-                  type="text"
-                  value={numeraTren}
-                  onChange={(e) => setNumeraTren(e.target.value)}
-                  autoFocus
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "8px 10px",
-                    borderRadius: 6,
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    background: "#2a2a2e",
-                    color: "#fff",
-                    marginBottom: 12,
-                  }}
-                />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => {
-                      const payload = {
-                        type: "numerar",
-                        payload: {
-                          Id: numeraTrenCv,
-                          Tren: numeraTren
-                        }
-                      }
-                      if (wsRef.current?.readyState === WebSocket.OPEN) {
-                        wsRef.current.send(JSON.stringify(payload));
-                      }
-                      setNumeraTrenCv("");
-                      setNumeraTren("");
-                    }}
-                    style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: "#0a84ff", color: "#fff", cursor: "pointer" }}
-                  >
-                    OK
-                  </button>
-                  <button
-                    onClick={() => {
-                      setNumeraTrenCv("");
-                      setNumeraTren("");
-                    }}
-                    style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: "#666", color: "#fff", cursor: "pointer" }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={layoutRef} style={{height: "auto"}}/>
-          {contextMenu.visible && contextMenu.element && (
-          <div
-            id="context-menu"
-            style={{
-              position: "fixed",
-              top: contextMenu.y,
-              left: contextMenu.x,
-              background: "#222",
-              color: "#fff",
-              border: "1px solid #555",
-              borderRadius: 6,
-              zIndex: 100,
-              padding: 4,
-              minWidth: 120,
-            }}
-          >
-            <div
-              style={{
-                padding: "4px 8px",
-                fontWeight: "bold",
-                fontSize: "14px",
-                color: "#fff",
-              }}
-            >
-              {contextMenu.element.Estación} {contextMenu.element.Id}
-            </div>
-            <hr
-              style={{
-                margin: "4px 0",
-                border: "none",
-                borderTop: "1px solid #444",
-              }}
-            />
-            {contextMenu.element.Mandos?.map((mando) => (
-              <div
-                key={mando}
-                style={{
-                  padding: "4px 10px",
-                  whiteSpace: "nowrap",
-                  cursor: "pointer",
-                  borderRadius: 3,
-                  color: mandos_especiales.includes(mando) ? '#f00' : '#fff',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.12)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                onClick={() => {
-                  setCmdText((prev) => {
-                      let newCmd = [mando, contextMenu.element.Estación]
-                      if (contextMenu.element.Tipo != "Estación") newCmd.push(contextMenu.element.Id);
-                      return newCmd.join(' ')
-                  });
-                  setContextMenu({ ...contextMenu, visible: false });
-                }}
-              >
-                {mando}
-              </div>
-            ))}
-          </div>
-        )}
-        </div>
-      </div>
-      {DEBUG_MODE && (
-        <div
-          style={{
-            width: "100vw",
-            boxSizing: "border-box",
-            flex: "0 0 auto",
-            display: "flex",
-            alignItems: "center",
-            background: "#333",
-            padding: "8px 16px",
-            minHeight: 40,
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            overflowX: "auto",
-          }}
-        >
-          {cvs.length > 0 && (
-            <ContadoresEjes columns={cvs} labels={["liberar", "ocupar"]} onAction={(ceje, par) => {
-              const msg = {
-                type: "mqtt",
-                topic: `cv/${ceje}/field_state`,
-                payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
-              }
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify(msg));
-              }
-            }}/>
-          )}
-        </div>
-      )}
-      {DEBUG_MODE && cejes.length > 0 && (
-        <div
-          style={{
-            width: "100vw",
-            boxSizing: "border-box",
-            flex: "0 0 auto",
-            display: "flex",
-            alignItems: "center",
-            background: "#2b2b2b",
-            padding: "8px 16px",
-            minHeight: 40,
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            overflowX: "auto",
-          }}
-        >
-          <ContadoresEjes columns={cejes} onAction={(ceje, par) => {
-              const msg = {
-                type: "mqtt",
-                topic: `cejes/${ceje}/event`,
-                payload: par ? "Reverse" : "Nominal"
-              }
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify(msg));
-              }
-            }}/>
-        </div>
-      )}
-      <div
-        style={{
-          width: "100vw",
-          boxSizing: "border-box",
-          flex: "0 0 auto",
-          display: "flex",
-          alignItems: "stretch",
-          gap: 20,
-          background: "#444",
-          padding: "12px 16px",
-          minHeight: 52,
-          borderTop: "1px solid rgba(255,255,255,0.15)",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <input
-            list="cmd-history"
-            value={cmdText}
-            onChange={(e) => setCmdText(e.target.value)}
-            placeholder="Introducir comando..."
-            style={{
-              width: 260,
-              maxWidth: "60vw",
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "#222",
-              color: "#fff",
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                sendCommand();
-              }
-              if (e.key === "F1" && mePendiente !== "") {
-                e.preventDefault();
-                handleME();
-              }
-            }}
-          />
-          <datalist id="cmd-history">
-            {cmdHistory.map((cmd, i) => (
-              <option key={i} value={cmd} />
-            ))}
-          </datalist>
-          <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-            <button onClick={handleCancelButton} style={{ background: "#666", color: "#fff" }}>
-              Cancelar
-            </button>
-            <button onClick={sendCommand} style={{ background: "#0a84ff", color: "#fff" }}>
-              Ejecutar
-            </button>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <div>
-            <button 
-              style={{
-                background: mePendiente !== "" ? "#f00" : "#c8c8c8", // Disabled color: light gray, Active color: red
-                color: "#000",
-                cursor: mePendiente !== "" ? "pointer" : "not-allowed"
-              }}
-              onClick={handleME}
-              disabled={mePendiente === ""}  // Disable button when mePendiente is ""
-            >
-              ME
-            </button>
-          </div>
-          <div>
-            <button 
-              style={{
-                background: mePendiente !== "" ? "#00f" : "#c8c8c8", // Disabled color: light gray, Active color: red
-                color: "#000",
-                cursor: mePendiente !== "" ? "pointer" : "not-allowed"
-              }}
-              onClick={cancelME}
-              disabled={mePendiente === ""}  // Disable button when mePendiente is ""
-            >
-              BL
-            </button>
-          </div>
-        </div>
-
-        <div
-          style={{
-            flex: "1 1 auto",
-            minWidth: 160,
-            color: "#fff",
-            fontSize: 14,
-            background: "rgba(0,0,0,0.5)",
-            padding: "4px 8px",
-            borderRadius: 6,
-            overflowY: 'auto',
-            maxHeight: "10vh"
-          }}
-        >
-          {log.map((item, index) => (
-            <div key={index}>{item}</div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );  
+    <VisorPanelView
+      ref={viewRef}
+      layoutRef={layoutRef}
+      panelRef={panelRef}
+      onPanelContextMenu={handlePanelRightClick}
+      numeraTrenCv={numeraTrenCv}
+      numeraTren={numeraTren}
+      setNumeraTren={setNumeraTren}
+      onNumerarOk={handleNumerarOk}
+      onNumerarCancel={handleNumerarCancel}
+      contextMenu={contextMenu}
+      onMandoSelect={handleContextMenuOption}
+      DEBUG_MODE={DEBUG_MODE}
+      cvs={cvs}
+      cejes={cejes}
+      onCvAction={handleCvAction}
+      onCejeAction={handleCejeAction}
+      cmdText={cmdText}
+      setCmdText={setCmdText}
+      sendCommand={sendCommand}
+      handleCancelButton={handleCancelButton}
+      mePendiente={mePendiente}
+      handleME={handleME}
+      cancelME={cancelME}
+      cmdHistory={cmdHistory}
+      log={log}
+    />
+  );
 }
 
 export default App;
