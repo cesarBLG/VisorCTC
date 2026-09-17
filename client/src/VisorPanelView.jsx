@@ -9,6 +9,23 @@ const MANDOS_ESPECIALES = [
   "ABTV", "DTV", "LC", "AMLE",
 ];
 
+// Cuadraditos de estado: colores primarios y secundarios puros.
+const STATUS_COLORS = [
+  "#00ff00", // verde
+  "#ffffff", // blanco
+  "#ff0000", // rojo
+  "#ff00ff", // magenta
+  "#ffff00", // amarillo
+  "#0000ff", // azul
+];
+
+const statusSquare = (color) => ({
+  width: 14,
+  height: 14,
+  display: "block",
+  background: color
+});
+
 const zoomBtnStyle = {
   background: "#555",
   color: "#fff",
@@ -39,6 +56,8 @@ const VisorPanelView = forwardRef(function VisorPanelView(
     // refs al DOM gestionado por App
     layoutRef,
     panelRef,
+    // indicadores de estado (parpadeo)
+    isBlinking,
     // comportamiento del panel
     onPanelContextMenu,
     // modal "numerar tren"
@@ -146,6 +165,15 @@ const VisorPanelView = forwardRef(function VisorPanelView(
     return () => el.removeEventListener("wheel", handler);
   }, []);
 
+  // Fecha y hora actuales para los indicadores de estado.
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 500);
+    return () => clearInterval(t);
+  }, []);
+  const formattedDate = now.toLocaleDateString("es-ES");
+  const formattedTime = now.toLocaleTimeString("es-ES", { hour12: false });
+
   return (
     <div
       style={{
@@ -171,12 +199,44 @@ const VisorPanelView = forwardRef(function VisorPanelView(
         }}
         onContextMenu={onPanelContextMenu}
       >
+        {/* Cuadraditos de estado + fecha/hora (arriba a la izquierda) */}
         <div
           style={{
             position: "fixed",
             top: 10,
             left: 12,
             zIndex: 400,
+            background: "rgba(0,0,0,0.55)",
+            padding: "5px 8px",
+            borderRadius: 6,
+            color: "#fff",
+          }}
+        >
+          <div style={{ fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
+            {formattedTime} {formattedDate}
+          </div>
+          <div style={{ display: "flex" }}>
+            {STATUS_COLORS.map((color) => (
+              <span key={`fixed-${color}`} style={statusSquare(color)} />
+            ))}
+          </div>
+          <div style={{ display: "flex" }}>
+            {STATUS_COLORS.map((color) => (
+              <span
+                key={`blink-${color}`}
+                style={{ ...statusSquare(color), opacity: isBlinking ? 1 : 0 }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Zoom (arriba a la derecha) */}
+        <div
+          style={{
+            position: "fixed",
+            top: 10,
+            right: 14,
+            zIndex: 500,
             display: "flex",
             alignItems: "center",
             gap: 6,

@@ -429,6 +429,7 @@ function App() {
       ref={viewRef}
       layoutRef={layoutRef}
       panelRef={panelRef}
+      isBlinking={isBlinking}
       onPanelContextMenu={handlePanelRightClick}
       numeraTrenCv={numeraTrenCv}
       numeraTren={numeraTren}
