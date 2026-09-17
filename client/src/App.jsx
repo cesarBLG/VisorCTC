@@ -23,6 +23,8 @@ function App() {
   const [cmdHistory, setCmdHistory] = useState([]);
   const [numeraTrenCv, setNumeraTrenCv] = useState("");
   const [numeraTren, setNumeraTren] = useState("");
+  const [cvs, setCvs] = useState([]); // CVs -> topic cv/...
+  const [cejes, setCejes] = useState([]); // Contadores de ejes -> topic cejes/...
 
   const wsRef = useRef(null);
   const panelRef = useRef(null);
@@ -142,8 +144,28 @@ function App() {
       };
     }
     setupWs();
+
+    // Cargar la lista de CVs para los contadores de ejes desde el servidor.
+    let cancelledFetch = false;
+    fetch("/api/cv")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelledFetch) return;
+        setCvs(data);
+      })
+      .catch((err) => console.error("Error fetching CV list:", err));
+
+    fetch("/api/cejes")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelledFetch) return;
+        setCejes(data);
+      })
+      .catch((err) => console.error("Error fetching contadores de ejes list:", err));
+
     return () => {
       retry = false;
+      cancelledFetch = true;
       wsRef.current?.close();
     }
   }, []);
@@ -629,16 +651,6 @@ function App() {
           </div>
         )}
         </div>
-        {/*<ContadoresEjes columns={["CTL/S2","CTL/E1","TMB/S1","TMB/S2_1","TMB/E'1"]} onAction={(ceje, par) => {
-          const msg = {
-            type: "mqtt",
-            topic: `cejes/${ceje}/event`,
-            payload: par ? "Reverse" : "Nominal"
-          }
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify(msg));
-          }
-        }}/>*/}
       </div>
       {DEBUG_MODE && (
         <div
@@ -655,16 +667,45 @@ function App() {
             overflowX: "auto",
           }}
         >
-          <ContadoresEjes columns={["RFP/CV1A", "RFP/CV3A", "RFP/CVA6", "RFP/CVA4", "RFP/CV1", "RFP/CV3", "RFP/CVA2", "RFP/CVE'2", "PLE/CVE'1"]} onAction={(ceje, par) => {
-            const msg = {
-              type: "mqtt",
-              topic: `cv/${ceje}/field_state`,
-              payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
-            }
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify(msg));
-            }
-          }}/>
+          {cvs.length > 0 && (
+            <ContadoresEjes columns={cvs} labels={["liberar", "ocupar"]} onAction={(ceje, par) => {
+              const msg = {
+                type: "mqtt",
+                topic: `cv/${ceje}/field_state`,
+                payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
+              }
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify(msg));
+              }
+            }}/>
+          )}
+        </div>
+      )}
+      {DEBUG_MODE && cejes.length > 0 && (
+        <div
+          style={{
+            width: "100vw",
+            boxSizing: "border-box",
+            flex: "0 0 auto",
+            display: "flex",
+            alignItems: "center",
+            background: "#2b2b2b",
+            padding: "8px 16px",
+            minHeight: 40,
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            overflowX: "auto",
+          }}
+        >
+          <ContadoresEjes columns={cejes} onAction={(ceje, par) => {
+              const msg = {
+                type: "mqtt",
+                topic: `cejes/${ceje}/event`,
+                payload: par ? "Reverse" : "Nominal"
+              }
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify(msg));
+              }
+            }}/>
         </div>
       )}
       <div

@@ -15,8 +15,8 @@ const port = 8080;
 
 // ---- MQTT Setup ----
 //const mqttUrl = "mqtt://192.168.0.2:1883"
-const mqttUrl = "mqtt://10.194.70.1:1883";
-//const mqttUrl = "mqtt://localhost:1883";
+//const mqttUrl = "mqtt://10.194.70.1:1883";
+const mqttUrl = "mqtt://localhost:1883";
 const mqttClient = mqtt.connect(mqttUrl, {
   will: {
     topic: 'desconexion',
@@ -51,6 +51,13 @@ fs.watch(filename, (eventType, file) => {
 // Route to handle request and send the layout SVG
 app.get("/api/layout.svg", (req, res) => {
   res.type("image/svg+xml").send(svgCode);
+});
+
+app.get("/api/cv", (req, res) => {
+  res.json(cvs);
+});
+app.get("/api/cejes", (req, res) => {
+  res.json(cejes);
 });
 
 app.use(express.static(path.join(__dirname, "client/dist")));
@@ -94,6 +101,25 @@ for (const ence of ["RFP", "PLE", "BM"]) {
   }
 }
 const numeradorTrenes = new numerador(cfgNumerador, broadcastClients)
+
+const cvs = [];
+const cejes = [];
+for (const cfg of cfgNumerador) {
+  if (!cfg.Dependencias) continue;
+  for (const [depId, dependencia] of Object.entries(cfg.Dependencias)) {
+    if (!dependencia.Controlada || !dependencia.CVs) continue;
+    for (const [cvId, cv] of Object.entries(dependencia.CVs)) {
+      if (cv.ContadoresEjes)
+      {
+        for (const cejesId of Object.keys(cv.ContadoresEjes))
+        {
+          if (!cejes.includes(cejesId)) cejes.push(cejesId.replace(':', '/'))
+        }
+      }
+      else cvs.push(`${depId}/${cvId}`);
+    }
+  }
+}
 
 const onMqttError = () => {
   for (const key of Object.keys(datosRemota)) {
