@@ -9,6 +9,9 @@ import { renderFMV } from './renderers/fmv';
 import { renderPN } from './renderers/pn';
 import ContadoresEjes from "./cejes";
 
+// Debug-only UI (contadores de ejes): shown only while running the dev server.
+const DEBUG_MODE = process.env.NODE_ENV === "development";
+
 function App() {
   const [elements, setElements] = useState([]);
   const [state, setState] = useState({});
@@ -24,6 +27,40 @@ function App() {
   const wsRef = useRef(null);
   const panelRef = useRef(null);
   const layoutRef = useRef(null);
+
+  // ---- In-app zoom (independent of browser zoom) ----
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  const panelScrollRef = useRef(null);
+
+  const MIN_ZOOM = 0.25;
+  const MAX_ZOOM = 4;
+  const ZOOM_STEP = 0.2;
+
+  // Re-applies the layout width based on current window size and in-app zoom.
+  const applyLayoutSize = () => {
+    const el = layoutRef.current;
+    if (!el) return;
+    el.style.width = `${Math.round(window.innerWidth * (zoomRef.current || 1))}px`;
+  };
+
+  const changeZoom = (delta) => {
+    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(zoomRef.current + delta).toFixed(2)));
+    zoomRef.current = next;
+    setZoom(next);
+    applyLayoutSize();
+  };
+
+  const zoomBtnStyle = {
+    background: "#555",
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+    padding: "2px 9px",
+    cursor: "pointer",
+    fontSize: 14,
+    lineHeight: 1.3,
+  };
 
   const mandos_especiales = ["DEI","ABS","DS","ABDE","ABD","MAE","ANE","AIE","EMA","ABA","DIA","AM","AAM","RTA","MCE","CCE","CUE","ABC","DIC","NSB","APB","NB","TME","RM","LD","LN","DCA","LE","ABV","DIV","ABTV","DTV","LC","AMLE"];
 
@@ -137,23 +174,17 @@ function App() {
   const handleMiddleClick = (e, el) => {
     setCmdText([])
     e.preventDefault();
-    if (el.Mandos.length === 0) return;
-    // Get position relative to the panel container
-    const panelRect = panelRef.current.getBoundingClientRect();
-    const clickX = e.clientX - panelRect.left;
-    const clickY = e.clientY - panelRect.top;
-
-    // Base position
-    let menuX = clickX;
-    let menuY = clickY;
+    if (!el.Mandos || el.Mandos.length === 0) return;
 
     // Estimate menu size (you can tweak)
     const menuWidth = 150;
     const menuHeight = (el.Mandos?.length || 1) * 24 + 8;
 
-    // Auto-shift if near right/bottom edge
-    if (menuX + menuWidth > panelRect.width) menuX = panelRect.width - menuWidth - 5;
-    if (menuY + menuHeight > panelRect.height) menuY = panelRect.height - menuHeight - 5;
+    // Use viewport coordinates and clamp so the menu never leaves the screen
+    let menuX = e.clientX;
+    let menuY = e.clientY;
+    if (menuX + menuWidth > window.innerWidth) menuX = Math.max(0, window.innerWidth - menuWidth - 5);
+    if (menuY + menuHeight > window.innerHeight) menuY = Math.max(0, window.innerHeight - menuHeight - 8);
 
     setContextMenu({
       visible: true,
@@ -262,6 +293,22 @@ function App() {
     }
     panelRef.current.addEventListener("click", handleClick);
 
+    // Re-fit the SVG width only on real window resizes. Browser page-zoom also
+    // fires "resize" while changing devicePixelRatio, so if the DPR changed we
+    // treat it as a zoom and leave the enlarged size alone (otherwise zooming in
+    // would be immediately undone).
+    let lastDpr = window.devicePixelRatio;
+    const handleResize = () => {
+      const dprChanged =
+        Math.round(window.devicePixelRatio * 100) !== Math.round(lastDpr * 100);
+      if (dprChanged || !layoutRef.current) {
+        lastDpr = window.devicePixelRatio;
+        return;
+      }
+      applyLayoutSize();
+    };
+    window.addEventListener("resize", handleResize);
+
     let cancelled = false;
     const components = {}
     fetch("/api/layout.svg")
@@ -270,15 +317,22 @@ function App() {
         if (cancelled) return;
         layoutRef.current.innerHTML = svgText;
         const svg = layoutRef.current.querySelector("svg");
+        
         svg.removeAttribute("width");
         svg.removeAttribute("height");
-
-        svg.setAttribute("preserveAspectRatio", "xMidYMid slice");
+        svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
         Object.assign(svg.style, {
           width: "100%",
-          height: "100%",
+          height: "auto",
           display: "block"
         });
+
+        // Start at the full screen width as a fixed pixel size instead of using
+        // the vw unit. The vw unit stays locked to the viewport and ignores page
+        // zoom (so it never grows). Fixed pixels get multiplied by browser zoom,
+        // Size to the current window width (x in-app zoom). Fixed pixels let
+        // our own zoom enlarge it and produce internal scrollbars.
+        applyLayoutSize();
         const layerNames = ["Destino", "Señal", "Bloqueo", "Estación", "CV", "Aguja", "IMV", "FMV", "PN"]
         for (const i in layerNames) {
           const layerName = layerNames[i];
@@ -354,8 +408,34 @@ function App() {
           if (handlerc) g.removeEventListener("contextmenu", handlerc);
         });
       });
+      window.removeEventListener("resize", handleResize);
       if (panelRef.current) panelRef.current.removeEventListener("click", handleClick);
     };
+  }, []);
+
+  // Use the mouse wheel for HORIZONTAL scrolling over the layout only.
+  useEffect(() => {
+    const el = panelScrollRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      // Ctrl/Cmd + wheel -> zoom the layout in/out
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        changeZoom(Math.sign(e.deltaY) < 0 ? ZOOM_STEP : -ZOOM_STEP);
+        return;
+      }
+      // Shift + wheel -> vertical scroll over the panel
+      if (e.shiftKey) {
+        e.preventDefault();
+        el.scrollTop += e.deltaY || e.deltaX;
+        return;
+      }
+      // Plain wheel -> horizontal scroll over the layout
+      e.preventDefault();
+      el.scrollLeft += e.deltaY || e.deltaX;
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
   }, []);
 
   // --- UI ---
@@ -364,14 +444,20 @@ function App() {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
+        width: "100vw",
+        minHeight: "100vh",
+        boxSizing: "border-box",
         background: "#000",
+        overflowX: "hidden",
       }}
     >
       <div
         id="panel-container"
+        ref={panelScrollRef}
         style={{
           flexGrow: 1,
+          display: "flex",
+          minHeight: "300px",
           position: "relative",
           overflow: "auto",
           borderTop: "2px solid #555",
@@ -379,20 +465,77 @@ function App() {
         onContextMenu={handlePanelRightClick}
       >
         <div
+          style={{
+            position: "fixed",
+            top: 10,
+            left: 12,
+            zIndex: 400,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            background: "rgba(0,0,0,0.55)",
+            padding: "4px 8px",
+            borderRadius: 6,
+          }}
+        >
+          <button onClick={() => changeZoom(-ZOOM_STEP)} title="Alejar" style={zoomBtnStyle}>−</button>
+          <span style={{ color: "#fff", fontSize: 12, minWidth: 46, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => changeZoom(ZOOM_STEP)} title="Acercar" style={zoomBtnStyle}>+</button>
+          <button
+            onClick={() => { zoomRef.current = 1; setZoom(1); applyLayoutSize(); }}
+            title="Restablecer"
+            style={{ ...zoomBtnStyle, whiteSpace: "nowrap" }}
+          >
+            Reset
+          </button>
+        </div>
+        <div
           ref={panelRef}
           className="panel"
+          style={{ margin: "auto" }}
         >
           {numeraTrenCv && (
-            <div>
-              <div>
-                <h3>Número de tren en {numeraTrenCv}</h3>
+            <div style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 300,
+              display: "flex",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}>
+              <div style={{
+                marginTop: 20,
+                background: "#1b1b1f",
+                border: "1px solid #555",
+                borderRadius: 8,
+                padding: 16,
+                minWidth: 280,
+                boxShadow: "0 6px 24px rgba(0,0,0,0.7)",
+                color: "#fff",
+                pointerEvents: "auto",
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>
+                  Número de tren en {numeraTrenCv}
+                </div>
                 <input
                   type="text"
                   value={numeraTren}
                   onChange={(e) => setNumeraTren(e.target.value)}
                   autoFocus
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    background: "#2a2a2e",
+                    color: "#fff",
+                    marginBottom: 12,
+                  }}
                 />
-                <div>
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={() => {
                       const payload = {
@@ -408,26 +551,29 @@ function App() {
                       setNumeraTrenCv("");
                       setNumeraTren("");
                     }}
+                    style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: "#0a84ff", color: "#fff", cursor: "pointer" }}
                   >
                     OK
                   </button>
-                  <button onClick={() => {
-                    setNumeraTrenCv("");
-                    setNumeraTren("");
-                  }}
+                  <button
+                    onClick={() => {
+                      setNumeraTrenCv("");
+                      setNumeraTren("");
+                    }}
+                    style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: "#666", color: "#fff", cursor: "pointer" }}
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               </div>
             </div>
           )}
-          <div style={{width: "100vw", height: "100%"}} ref={layoutRef}/>
+          <div ref={layoutRef} style={{height: "auto"}}/>
           {contextMenu.visible && contextMenu.element && (
           <div
             id="context-menu"
             style={{
-              position: "absolute",
+              position: "fixed",
               top: contextMenu.y,
               left: contextMenu.x,
               background: "#222",
@@ -460,10 +606,14 @@ function App() {
               <div
                 key={mando}
                 style={{
-                  padding: "4px 8px",
+                  padding: "4px 10px",
                   whiteSpace: "nowrap",
+                  cursor: "pointer",
+                  borderRadius: 3,
                   color: mandos_especiales.includes(mando) ? '#f00' : '#fff',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.12)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 onClick={() => {
                   setCmdText((prev) => {
                       let newCmd = [mando, contextMenu.element.Estación]
@@ -489,28 +639,46 @@ function App() {
             wsRef.current.send(JSON.stringify(msg));
           }
         }}/>*/}
-        <ContadoresEjes columns={["RFP/CV1A", "RFP/CV3A", "RFP/CVA6", "RFP/CVA4", "RFP/CV1", "RFP/CV3", "RFP/CVA2", "RFP/CVE'2", "PLE/CVE'1"]} onAction={(ceje, par) => {
-          const msg = {
-            type: "mqtt",
-            topic: `cv/${ceje}/field_state`,
-            payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
-          }
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify(msg));
-          }
-        }}/>
       </div>
+      {DEBUG_MODE && (
+        <div
+          style={{
+            width: "100vw",
+            boxSizing: "border-box",
+            flex: "0 0 auto",
+            display: "flex",
+            alignItems: "center",
+            background: "#333",
+            padding: "8px 16px",
+            minHeight: 40,
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            overflowX: "auto",
+          }}
+        >
+          <ContadoresEjes columns={["RFP/CV1A", "RFP/CV3A", "RFP/CVA6", "RFP/CVA4", "RFP/CV1", "RFP/CV3", "RFP/CVA2", "RFP/CVE'2", "PLE/CVE'1"]} onAction={(ceje, par) => {
+            const msg = {
+              type: "mqtt",
+              topic: `cv/${ceje}/field_state`,
+              payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
+            }
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify(msg));
+            }
+          }}/>
+        </div>
+      )}
       <div
         style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
+          width: "100vw",
+          boxSizing: "border-box",
+          flex: "0 0 auto",
           display: "flex",
+          alignItems: "stretch",
+          gap: 20,
           background: "#444",
           padding: "12px 16px",
-          borderTop: "1px solid rgba(255,255,255,0.1)",
-          zIndex: 1000,
+          minHeight: 52,
+          borderTop: "1px solid rgba(255,255,255,0.15)",
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -520,8 +688,8 @@ function App() {
             onChange={(e) => setCmdText(e.target.value)}
             placeholder="Introducir comando..."
             style={{
-              width: "20vw",
-              minWidth: 200,
+              width: 260,
+              maxWidth: "60vw",
               padding: "8px 10px",
               borderRadius: 6,
               border: "1px solid rgba(255,255,255,0.12)",
@@ -553,28 +721,13 @@ function App() {
             </button>
           </div>
         </div>
-        <div
-          style={{
-            color: "#fff",
-            fontSize: 14,
-            background: "rgba(0,0,0,0.5)",
-            padding: "4px 4px",
-            borderRadius: 6,
-            width: '35%',
-            overflowY: 'auto',
-            maxHeight: "10vh"
-          }}
-        >
-          {log.map((item, index) => (
-            <div key={index}>{item}</div>
-          ))}
-        </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <div>
             <button 
               style={{
                 background: mePendiente !== "" ? "#f00" : "#c8c8c8", // Disabled color: light gray, Active color: red
-                color: "#000"
+                color: "#000",
+                cursor: mePendiente !== "" ? "pointer" : "not-allowed"
               }}
               onClick={handleME}
               disabled={mePendiente === ""}  // Disable button when mePendiente is ""
@@ -586,7 +739,8 @@ function App() {
             <button 
               style={{
                 background: mePendiente !== "" ? "#00f" : "#c8c8c8", // Disabled color: light gray, Active color: red
-                color: "#000"
+                color: "#000",
+                cursor: mePendiente !== "" ? "pointer" : "not-allowed"
               }}
               onClick={cancelME}
               disabled={mePendiente === ""}  // Disable button when mePendiente is ""
@@ -594,6 +748,24 @@ function App() {
               BL
             </button>
           </div>
+        </div>
+
+        <div
+          style={{
+            flex: "1 1 auto",
+            minWidth: 160,
+            color: "#fff",
+            fontSize: 14,
+            background: "rgba(0,0,0,0.5)",
+            padding: "4px 8px",
+            borderRadius: 6,
+            overflowY: 'auto',
+            maxHeight: "10vh"
+          }}
+        >
+          {log.map((item, index) => (
+            <div key={index}>{item}</div>
+          ))}
         </div>
       </div>
     </div>
