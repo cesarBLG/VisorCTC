@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import ContadoresEjes from "./cejes";
 
 // Visualización de mandos especiales (se colorean en rojo en el menú contextual).
@@ -91,29 +91,17 @@ const zoomBtnStyle = {
   lineHeight: 1.3,
 };
 
-// Cálculo de la posición del menú contextual, ajustada (clamped) para que nunca
-// salga de los límites de la ventana.
-export function computeContextMenuPosition(e, mandos) {
-  const menuWidth = 150;
-  const menuHeight = (mandos?.length || 1) * 24 + 8;
-
-  let x = e.clientX;
-  let y = e.clientY;
-  if (x + menuWidth > window.innerWidth) x = Math.max(0, window.innerWidth - menuWidth - 5);
-  if (y + menuHeight > window.innerHeight) y = Math.max(0, window.innerHeight - menuHeight - 8);
-
-  return { x, y };
-}
-
-const VisorPanelView = forwardRef(function VisorPanelView(
+export default function VisorPanelView(
   {
     // refs al DOM gestionado por App
     layoutRef,
     panelRef,
+    zoomRef,
     // indicadores de estado (parpadeo)
     isBlinking,
     // comportamiento del panel
     onPanelContextMenu,
+    applyLayoutSize,
     // modal "numerar tren"
     numeraTrenCv,
     numeraTren,
@@ -139,41 +127,24 @@ const VisorPanelView = forwardRef(function VisorPanelView(
     cancelME,
     cmdHistory,
     log,
-  },
-  ref
+  }
 ) {
   const panelScrollRef = useRef(null);
-
-  // ---- Zoom dentro de la app (independiente del zoom del navegador) ----
-  const [zoom, setZoom] = useState(1);
-  const zoomRef = useRef(1);
 
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 4;
   const ZOOM_STEP = 0.2;
 
-  // Re-applies the layout width based on current window size and in-app zoom.
-  const applyLayoutSize = () => {
-    const el = layoutRef.current;
-    if (!el) return;
-    el.style.width = `${Math.round(window.innerWidth * (zoomRef.current || 1))}px`;
-  };
-
   const changeZoom = (delta) => {
     const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(zoomRef.current + delta).toFixed(2)));
     zoomRef.current = next;
-    setZoom(next);
     applyLayoutSize();
   };
 
   const resetZoom = () => {
     zoomRef.current = 1;
-    setZoom(1);
     applyLayoutSize();
   };
-
-  // Expone a App únicamente el ajuste de tamaño necesario tras cargar el SVG.
-  useImperativeHandle(ref, () => ({ applyLayoutSize }));
 
   // Re-fit the SVG width only on real window resizes. Browser page-zoom also
   // fires "resize" while changing devicePixelRatio, so if the DPR changed we
@@ -206,14 +177,14 @@ const VisorPanelView = forwardRef(function VisorPanelView(
         return;
       }
       // Shift + wheel -> vertical scroll over the panel
-      if (e.shiftKey) {
+      /*if (e.shiftKey) {
         e.preventDefault();
         el.scrollTop += e.deltaY || e.deltaX;
         return;
       }
       // Plain wheel -> horizontal scroll over the layout
       e.preventDefault();
-      el.scrollLeft += e.deltaY || e.deltaX;
+      el.scrollLeft += e.deltaY || e.deltaX;*/
     };
     el.addEventListener("wheel", handler, { passive: false });
     return () => el.removeEventListener("wheel", handler);
@@ -234,10 +205,11 @@ const VisorPanelView = forwardRef(function VisorPanelView(
         display: "flex",
         flexDirection: "column",
         width: "100vw",
-        minHeight: "100vh",
+        height: "100vh",
         boxSizing: "border-box",
         background: "#000",
         overflowX: "hidden",
+        overflowY: "hidden",
       }}
     >
       <div
@@ -300,7 +272,7 @@ const VisorPanelView = forwardRef(function VisorPanelView(
           }}
         >
           <button onClick={() => changeZoom(-ZOOM_STEP)} title="Alejar" style={zoomBtnStyle}>−</button>
-          <span style={{ color: "#fff", fontSize: 12, minWidth: 46, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+          <span style={{ color: "#fff", fontSize: 12, minWidth: 46, textAlign: "center" }}>{Math.round(zoomRef.current * 100)}%</span>
           <button onClick={() => changeZoom(ZOOM_STEP)} title="Acercar" style={zoomBtnStyle}>+</button>
           <button
             onClick={resetZoom}
@@ -594,6 +566,4 @@ const VisorPanelView = forwardRef(function VisorPanelView(
       </div>
     </div>
   );
-});
-
-export default VisorPanelView;
+}

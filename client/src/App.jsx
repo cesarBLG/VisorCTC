@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import VisorPanelView, { computeContextMenuPosition } from './VisorPanelView';
+import VisorPanelView from './VisorPanelView';
 import { renderCvLineal } from './renderers/cvLineal';
 import { renderAguja } from './renderers/aguja';
 import { renderSeñal } from './renderers/señal';
@@ -30,6 +30,7 @@ function App() {
   const panelRef = useRef(null);
   const layoutRef = useRef(null);
   const viewRef = useRef(null);
+  const zoomRef = useRef(1);
 
   const [isBlinking, setIsBlinking] = useState(false);
   useEffect(() => {
@@ -40,6 +41,12 @@ function App() {
 
     return () => clearInterval(blinkInterval); // Cleanup interval on component unmount
   }, []);
+  // Re-applies the layout width based on current window size and in-app zoom.
+  const applyLayoutSize = () => {
+    const el = layoutRef.current;
+    if (!el) return;
+    el.style.width = `${Math.round(window.innerWidth * (zoomRef.current || 1))}px`;
+  };
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -163,8 +170,13 @@ function App() {
     e.preventDefault();
     if (!el.Mandos || el.Mandos.length === 0) return;
 
-    // La posición del menú se calcula y ajusta en VisorPanelView.
-    const { x, y } = computeContextMenuPosition(e, el.Mandos);
+    const menuWidth = 150;
+    const menuHeight = (el.Mandos?.length || 1) * 24 + 8;
+  
+    let x = e.clientX;
+    let y = e.clientY;
+    if (x + menuWidth > window.innerWidth) x = Math.max(0, window.innerWidth - menuWidth - 5);
+    if (y + menuHeight > window.innerHeight) y = Math.max(0, window.innerHeight - menuHeight - 8);
     setContextMenu({ visible: true, x, y, element: el });
   }
   const sendCommand = () => {
@@ -343,7 +355,7 @@ function App() {
         // zoom (so it never grows). Fixed pixels get multiplied by browser zoom,
         // Size to the current window width (x in-app zoom). Fixed pixels let
         // our own zoom enlarge it and produce internal scrollbars.
-        viewRef.current?.applyLayoutSize();
+        applyLayoutSize();
         const layerNames = ["Destino", "Señal", "Bloqueo", "Estación", "CV", "Aguja", "IMV", "FMV", "PN"]
         for (const i in layerNames) {
           const layerName = layerNames[i];
@@ -426,11 +438,12 @@ function App() {
   // --- UI (delegada al componente de visualización) ---
   return (
     <VisorPanelView
-      ref={viewRef}
       layoutRef={layoutRef}
       panelRef={panelRef}
+      zoomRef={zoomRef}
       isBlinking={isBlinking}
       onPanelContextMenu={handlePanelRightClick}
+      applyLayoutSize={applyLayoutSize}
       numeraTrenCv={numeraTrenCv}
       numeraTren={numeraTren}
       setNumeraTren={setNumeraTren}
