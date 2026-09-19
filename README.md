@@ -60,3 +60,37 @@ Iniciar el backend del CTC:
 ```bash
 node server.js
 ```
+
+## Configuración (config/ctc.json)
+
+El servidor lee su configuración desde **`config/ctc.json`** por defecto. Si se quiere usar otra, se puede pasar la ruta al archivo como primer argumento:
+
+```bash
+node server.js config/mi_ctc.json
+```
+
+### Campos del fichero de configuración
+
+| Campo | Descripción | Valor por defecto (si falta) |
+| --- | --- | --- |
+| `MQTT.Host` | URL del broker MQTT al que conectarse, con el protocolo incluido. | `mqtt://localhost:1883` |
+| `Layout` | Ruta del SVG del panel videográfico. Se recarga automáticamente cuando cambia en disco. | `config/layout.svg` |
+| `ENCEs` | Array con las rutas de los ficheros JSON de configuración de topología de cada enclavamiento. | Vacío (`[]`) |
+
+### Ejemplo
+
+```json
+{
+  "MQTT": {
+    "Host": "mqtt://localhost:1883"
+  },
+  "Layout": "config/layout.svg",
+  "ENCEs": [
+    "config/config_MY.json",
+    "config/config_MT.json",
+    "config/config_MA.json",
+    "config/config_DP.json",
+    "config/config_BP.json"
+  ]
+}
+```

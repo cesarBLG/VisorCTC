@@ -304,7 +304,7 @@ function App() {
   const handleCejeAction = (ceje, par) => {
     const msg = {
       type: "mqtt",
-      topic: `cejes/${ceje}/event`,
+      topic: `cejes/${ceje.replace('/','_').replace(':', '/')}/event`,
       payload: par ? "Reverse" : "Nominal"
     };
     if (wsRef.current?.readyState === WebSocket.OPEN) {

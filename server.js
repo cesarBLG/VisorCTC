@@ -13,10 +13,21 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = 8080;
 
+// ---- Configuration ----
+const defaultConfigPath = path.join(__dirname, "config", "ctc.json");
+const configArg = process.argv[2];
+const configPath = configArg ? (path.isAbsolute(configArg) ? configArg : path.resolve(process.cwd(), configArg)) : defaultConfigPath;
+
+let config = {};
+try {
+  config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  console.log(`✅ Config loaded from ${configPath}`);
+} catch (err) {
+  console.error(`❌ Could not load config from ${configPath}:`, err.message);
+}
+
 // ---- MQTT Setup ----
-//const mqttUrl = "mqtt://192.168.0.2:1883"
-//const mqttUrl = "mqtt://10.194.70.1:1883";
-const mqttUrl = "mqtt://localhost:1883";
+const mqttUrl = config.MQTT?.Host || "mqtt://localhost:1883";
 const mqttClient = mqtt.connect(mqttUrl, {
   will: {
     topic: 'desconexion',
@@ -26,7 +37,7 @@ const mqttClient = mqtt.connect(mqttUrl, {
   }
 });
 
-const filename = path.join(__dirname, "config/layout.svg")
+const filename = config.Layout || "config/layout.svg";
 let svgCode = null;
 function loadSvg()
 {
@@ -92,12 +103,13 @@ const broadcastClients = (msg) => {
 }
 
 const cfgNumerador = [];
-for (const ence of ["RFP", "PLE", "BM"]) {
+const topologiaConfigs = Array.isArray(config.ENCEs) ? config.ENCEs : [];
+for (const cfgFile of topologiaConfigs) {
   try {
-    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, `config/config_${ence}.json`), "utf8"));
+    const cfg = JSON.parse(fs.readFileSync(cfgFile, "utf8"));
     cfgNumerador.push(cfg);
   } catch (err) {
-    console.error(`Error loading config_${ence}.json:`, err);
+    console.error(`Error loading topology config ${cfgFile}:`, err.message);
   }
 }
 const numeradorTrenes = new numerador(cfgNumerador, broadcastClients)
@@ -107,16 +119,16 @@ const cejes = [];
 for (const cfg of cfgNumerador) {
   if (!cfg.Dependencias) continue;
   for (const [depId, dependencia] of Object.entries(cfg.Dependencias)) {
-    if (!dependencia.Controlada || !dependencia.CVs) continue;
+    if (dependencia.Controlada === false || !dependencia.CVs) continue;
     for (const [cvId, cv] of Object.entries(dependencia.CVs)) {
       if (cv.ContadoresEjes)
       {
         for (const cejesId of Object.keys(cv.ContadoresEjes))
         {
-          if (!cejes.includes(cejesId)) cejes.push(cejesId.replace(':', '/'))
+          if (!cejes.includes(cejesId)) cejes.push(cejesId)
         }
       }
-      else cvs.push(`${depId}/${cvId}`);
+      else cvs.push(`${depId}:${cvId}`);
     }
   }
 }

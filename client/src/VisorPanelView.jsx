@@ -425,7 +425,7 @@ export default function VisorPanelView(
         )}
         </div>
       </div>
-      {DEBUG_MODE && (
+      {DEBUG_MODE && cvs.length > 0 && (
         <div
           style={{
             width: "100vw",
