@@ -14,7 +14,7 @@ class numerador {
         this.cvs_definidos = {};
         for (const json of topologyJsons) {
             for (const [dep_id, dependencia] of Object.entries(json.Dependencias)) {
-                if (!dependencia.Controlada) continue;
+                if (dependencia.Controlada === false) continue;
                 for (const [id, sec] of Object.entries(dependencia.Secciones)) {
                     const full_id = dep_id+":"+id;
                     if (sec.Tipo === "Aguja" && !sec.Conexiones) {
@@ -170,7 +170,6 @@ class numerador {
                 let currentId = idSeccion;
                 let currentLado = lado;
                 while (currentId) {
-                    if (idSeccion === "RFP:CV1" && lado === "Par") console.log(currentId+" "+sec.LadoReserva);
                     const sec2 = this.secciones[currentId];
                     if (!sec2 || sec2.Estado !== "Reservado") break;
                     const sig = this.siguienteSeccion(currentId, currentLado, true);
@@ -200,7 +199,7 @@ class numerador {
                         if (stop) break;
                     }
                     const cross = this.siguienteSeccion(sig.Id, sig.InvertirParidad ? currentLado : oppLado(currentLado), true);
-                    if (cross.Id !== currentId) break;
+                    if (!cross || cross.Id !== currentId) break;
                     currentId = sig.Id;
                     currentLado = sig.InvertirParidad ? oppLado(currentLado) : currentLado;
                 }

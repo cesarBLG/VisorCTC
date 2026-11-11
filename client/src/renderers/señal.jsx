@@ -8,6 +8,21 @@ export const renderSeñal = (el, state, isBlinking) => {
   }
   else {
     switch (sig.SIG_IND ?? 0) {
+      case 0:
+        if (sig.SIG_FOCO_R === 3) {
+          colors = ['#f00', '#f00', '#f00', '#f00'];
+          blink[0] = true;
+        } else if (sig.SIG_FOCO_AM === 3) {
+          colors = ['transparent', 'transparent', '#ff0', '#ff0'];
+          blink[0] = true;
+        } else if (sig.SIG_FOCO_V === 3) {
+          colors = ['transparent', 'transparent', '#0f0', '#0f0'];
+          blink[0] = true;
+        } else if (sig.SIG_FOCO_BL_V === 3 || sig.SIG_FOCO_BL_H === 3 || sig.SIG_FOCO_BL_C === 3) {
+          colors = ['#fff', 'transparent', '#f00', '#f00'];
+          blink[2] = blink[3] = true;
+        }
+        break;
       case 2:
         colors = ['#f00', '#00f', '#00f', '#f00'];
         break;

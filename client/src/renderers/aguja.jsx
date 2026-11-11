@@ -86,7 +86,11 @@ export const renderAguja = (el, state, isBlinking) => {
   }
   if (bar_normal) bar_punta = bar_normal;
   if (bar_inv && (!bar_normal || est.AG_DES_I > est.AG_DES_N)) bar_punta = bar_inv;
-  if (est.AG_EST === 1 || est.AG_EST === 2) bar_punta = bar_normal = bar_inv = null;
+  if (est.AG_EST === 1 || est.AG_EST === 2) {
+    bar_punta = null;
+    /*if (est.AG_DIR !== 2) */bar_normal = null;
+    /*if (est.AG_DIR !== 1) */bar_inv = null;
+  }
   if (bar_inv && bar_normal) {
     if (est.AG_COMP === 1 || est.AG_COMP === 3) bar_inv = null;
     if (est.AG_COMP === 2 || est.AG_COMP === 4) bar_punta = null;
@@ -115,9 +119,9 @@ export const renderAguja = (el, state, isBlinking) => {
     if (bia) bia.style.visibility = (est.AG_BIA ?? 0) == 1 ? 'visible' : 'hidden';
   }
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t1a"]'), color_ocup, false, bar_punta);
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3R"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, est.AG_COMP === 0 && est.AG_COMP === 1, bar_normal);
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3R"]'), (est.AG_GAL === 1 && est.AG_COMP === 3) ? '#f00' : ((est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup), est.AG_COMP === 0 && est.AG_COMP === 1, bar_normal);
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t3Ra"]'), (est.AG_DIR === 2 || (est.AG_EST === 0 && est.AG_COMP === 4)) ? '#fff' : color_ocup, false, bar_normal)
-  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3L"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, est.AG_COMP === 0 || est.AG_COMP === 2, bar_inv)
+  setRegularTrackState(comp.querySelector('[inkscape\\:label="t3L"]'), (est.AG_GAL === 1 && est.AG_COMP === 4) ? '#f00' : ((est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup), est.AG_COMP === 0 || est.AG_COMP === 2, bar_inv)
   setRegularTrackState(comp.querySelector('[inkscape\\:label="t3La"]'), (est.AG_DIR === 1 || (est.AG_EST === 0 && est.AG_COMP === 3)) ? '#fff' : color_ocup, false, bar_inv)
 
   setDesliz(comp.querySelector('[inkscape\\:label="deslizLneg0"]'), bar_punta);
@@ -127,6 +131,9 @@ export const renderAguja = (el, state, isBlinking) => {
   setDesliz(comp.querySelector('[inkscape\\:label="deslizRpos1"]'), est.AG_COMP === 3 ? bar_normal : null)
   setDesliz(comp.querySelector('[inkscape\\:label="deslizRneg"]'), bar_inv);
   setDesliz(comp.querySelector('[inkscape\\:label="deslizLneg2"]'), null);
+
+  comp.querySelector('[inkscape\\:label="nombre"]').querySelector('tspan').style.fill = (est.AG_BA ?? 0) ? '#f00' : '#fff';
+  comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = '#000';
 
   const bia = comp.querySelector('[inkscape\\:label="bv"]');
   if (bia) {

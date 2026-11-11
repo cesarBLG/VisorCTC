@@ -293,7 +293,7 @@ function App() {
   const handleCvAction = (ceje, par) => {
     const msg = {
       type: "mqtt",
-      topic: `cv/${ceje}/field_state`,
+      topic: `cv/${ceje.replace('/','_').replace(':', '/')}/field_state`,
       payload: JSON.stringify({ Estado: par ? "Ocupado" : "Libre"})
     };
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -381,7 +381,7 @@ function App() {
               if (spl.length > 0) Mandos = spl[spl.length-1].split(',');
             } else {
               const mandosDefecto = ["CSP","I","B","C", undefined, "MA", undefined, undefined, "CPN"]
-              const mandos = [["CSP","BD","ABD","AS","AAS","DEI"],["I","M","R","ID","DAI","DAB","CSEÑ","SA","ASA","BS","ABS","FAI","AFA"], ["B", "AB", "PB", "APB", "CSB", "NSB"], ["C", "L", "ME"], ["LC", "BTV", "DTV"], ["MA", "AN", "AI", "BIA", "DIA", "BA", "ABA"], [], [], ["CPN", "APN"]]
+              const mandos = [["CSP","BD","ABD","AS","AAS","DEI"],["I","M","R","ID","DAI","DAB","CSEÑ","SA","ASA","BS","ABS","FAI","AFA"], ["B", "AB", "PB", "APB", "CSB", "NSB"], ["C", "L", "ME","LD","LN","BCA","DCA"], ["LC", "BTV", "DTV"], ["MA", "AN", "AI", "MAE", "ANE", "AIA", "BIA", "DIA", "BA", "ABA"], [], [], ["CPN", "APN"]]
               Mandos = mandos[i]
               MandoPredeterminado = mandosDefecto[i]
             }

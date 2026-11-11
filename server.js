@@ -112,7 +112,7 @@ for (const cfgFile of topologiaConfigs) {
     console.error(`Error loading topology config ${cfgFile}:`, err.message);
   }
 }
-const numeradorTrenes = new numerador(cfgNumerador, broadcastClients)
+const numeradorTrenes = config.Numerador ? new numerador(cfgNumerador, broadcastClients) : null;
 
 const cvs = [];
 const cejes = [];

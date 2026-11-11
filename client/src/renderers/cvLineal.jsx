@@ -16,8 +16,12 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
   comp.querySelector('[inkscape\\:label="bar_down"]').style.visibility = ((est.CV_CEJES_PREN ?? 0) == 1 && isBlinking) ? 'visible' : 'hidden';
   comp.querySelector('[inkscape\\:label="me_up"]').style.visibility = (est.CV_ME ?? 0) == 1 ? 'visible' : 'hidden';
   comp.querySelector('[inkscape\\:label="me_down"]').style.visibility = (est.CV_ME ?? 0) == 1 ? 'visible' : 'hidden';
-  const bv = comp.querySelector('[inkscape\\:label="bv"]')
-  if (bv) bv.style.visibility = (est.CV_BV ?? 0) == 1 ? 'visible' : 'hidden';
+  comp.querySelector('[inkscape\\:label="nombre"]').querySelector('tspan').style.fill = '#ff0';
+  comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = '#000';
+  const bvs = comp.querySelectorAll('[inkscape\\:label="bv"]');
+  bvs.forEach(bv => {
+    bv.style.visibility = (est.CV_BV ?? 0) == 1 ? 'visible' : 'hidden';
+  });
   const av = comp.querySelector('[inkscape\\:label="averia"]')
   if (av) av.style.visibility = ((est.CV_CEJES_AV ?? 0) == 1 && isBlinking) ? 'visible' : 'hidden';
 

@@ -21,9 +21,11 @@ export const renderFMV = (el, state, isBlinking) => {
         const circ = c.querySelector('[inkscape\\:label="circulo"]');
         circ.style.visibility = (index === ir.FMV_DIF_ELEM) && (ir.FMV_EST ?? 0) !== 0 && (isBlinking || !blink) ? 'visible' : 'hidden';
         circ.style.fill = color;
-        /*const bd = c.querySelector('[inkscape\\:label="bd"]');
-        bd.style.visibility = (ir.FMV_BD ?? 0) === 1 ? 'visible' : 'hidden';
-        bd.querySelector('[inkscape\\:label="rectExterior"]').style.visibility = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 ? 'visible' : 'hidden';
-        bd.querySelector('[inkscape\\:label="rectInterior"]').style.fill = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 ? '#000' : '#fff';*/
+        const bd = c.querySelector('[inkscape\\:label="bd"]');
+        if (bd) {
+            bd.style.visibility = (ir.FMV_BD ?? 0) === 1 && (index === ir.FMV_DIF_ELEM) ? 'visible' : 'hidden';
+            bd.querySelector('[inkscape\\:label="rectExterior"]').style.visibility = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 ? 'visible' : 'hidden';
+            bd.querySelector('[inkscape\\:label="rectInterior"]').style.fill = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 ? '#000' : '#fff';
+        }
     }
 }
