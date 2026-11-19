@@ -12,6 +12,15 @@ class numerador {
         this.señales = {}
         this.contador = 0;
         this.cvs_definidos = {};
+        const normalizeConnections = (conexiones) => {
+            for (const lado of ["Impar", "Par"]) {
+                if (!conexiones[lado]) conexiones[lado] = [];
+                for (let i = 0; i < conexiones[lado].length; i++) {
+                    const conex = conexiones[lado][i];
+                    if (!conex.Id) conexiones[lado][i] = { Id: conex };
+                }
+            }
+        };
         for (const json of topologyJsons) {
             for (const [dep_id, dependencia] of Object.entries(json.Dependencias)) {
                 if (dependencia.Controlada === false) continue;
@@ -22,11 +31,13 @@ class numerador {
                         sec.Conexiones[sec.Lado] = sec.SeccionesTalón;
                         sec.Conexiones[oppLado(sec.Lado)] = sec.SecciónPunta ? [sec.SecciónPunta] : [];
                     }
+                    normalizeConnections(sec.Conexiones);
                     sec.Trenes = [];
                     sec.TrenReservado = null;
                     this.secciones[full_id] = sec;
+                    if (sec.Alias) this.secciones[sec.Alias] = sec;
                 }
-                for (const blq of dependencia.Bloqueos) {
+                for (const blq of dependencia.Bloqueos ?? []) {
                     const full_id = dep_id+":"+blq.Colateral;
                     this.bloqueos[full_id] = blq;
                 }
@@ -45,6 +56,7 @@ class numerador {
                 for (const [id, cv] of Object.entries(dependencia.CVs)) {
                     const full_id = dep_id+":"+id;
                     this.cvs_definidos[full_id] = cv;
+                    if (cv.Alias) this.cvs_definidos[cv.Alias] = cv;
                 }
             }
         }
@@ -174,6 +186,8 @@ class numerador {
                     if (!sec2 || sec2.Estado !== "Reservado") break;
                     const sig = this.siguienteSeccion(currentId, currentLado, true);
                     if (!sig) break;
+                    const cross = this.siguienteSeccion(sig.Id, sig.InvertirParidad ? currentLado : oppLado(currentLado), true);
+                    if (!cross || (cross.Id !== currentId && cross.Id !== sec2.Alias)) break;
                     const pin = this.getPin(currentId, sig.Id, currentLado);
                     if (sec2.Señales) {
                         let stop = false;
@@ -198,8 +212,6 @@ class numerador {
                         }
                         if (stop) break;
                     }
-                    const cross = this.siguienteSeccion(sig.Id, sig.InvertirParidad ? currentLado : oppLado(currentLado), true);
-                    if (!cross || cross.Id !== currentId) break;
                     currentId = sig.Id;
                     currentLado = sig.InvertirParidad ? oppLado(currentLado) : currentLado;
                 }
@@ -213,7 +225,7 @@ class numerador {
         const sec = this.secciones[idSeccion];
         const sigs = sec.Conexiones[lado];
         let pin = 0;
-        if (sec.Posición === "-" && sec.Lado === lado)
+        if (sec.Posición === "-" && (sec.Lado === lado || sec.Tipo === "Cruzamiento"))
             pin = 1;
         if (sigs && sigs.length > pin && pin >= 0) {
             return sigs[pin];
@@ -304,6 +316,12 @@ class numerador {
         if (!sec || !sec.Tipo == "Aguja") return;
         sec.Posición = dir;
         this.onCambioEstadoSeccion(idAguja, estado);
+    }
+    onCambioEstadoCruzamiento(idCruzamiento, estado, dir) {
+        const sec = this.secciones[idCruzamiento];
+        if (!sec || !sec.Tipo == "Cruzamiento") return;
+        sec.Posición = dir;
+        this.onCambioEstadoSeccion(idCruzamiento, estado);
     }
     onCambioEstadoCV(idCV, estado) {
         const cv = this.cvs[idCV];
