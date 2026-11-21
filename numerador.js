@@ -56,14 +56,17 @@ class numerador {
                 for (const [id, cv] of Object.entries(dependencia.CVs)) {
                     const full_id = dep_id+":"+id;
                     this.cvs_definidos[full_id] = cv;
-                    if (cv.Alias) this.cvs_definidos[cv.Alias] = cv;
+                    this.cvs[full_id] = {Conexiones: {Par: [], Impar: []}, Trenes: [], Secciones: [], Id: full_id};
+                    if (cv.Alias) {
+                        this.cvs_definidos[cv.Alias] = cv;
+                        this.cvs[cv.Alias] = this.cvs[full_id];
+                    }
                 }
             }
         }
         for (const [id, sec] of Object.entries(this.secciones)) {
             const id_cv = this.getIdCV(id, sec);
             if (!id_cv) continue;
-            if (!this.cvs[id_cv]) this.cvs[id_cv] = {Conexiones: {Par: [], Impar: []}, Trenes: [], Secciones: [], Id: id_cv};
             this.cvs[id_cv].Secciones.push(id);
             for (const lado of ["Impar", "Par"]) {
                 for (const conex of sec.Conexiones[lado]) {
@@ -85,8 +88,9 @@ class numerador {
         let id_cv = idSeccion;
         if (sec.CV)
             id_cv = sec.CV;
-        if (this.cvs_definidos[id_cv])
+        if (this.cvs_definidos[id_cv]) {
             return id_cv;
+        }
         return null;
     }
     send(idSecciones) {
@@ -147,8 +151,10 @@ class numerador {
         const newId = this.idDesconocido();
         let changed = new Set();
         for (const idCV of tren.Ocupado) {
-            changed = new Set([...changed,...cv.Secciones]);
-            for (const trenCV of this.cvs[idCV].Trenes) {
+            const cv = this.cvs[idCV];
+            if (!cv) continue;
+            changed = new Set([...changed, ...cv.Secciones]);
+            for (const trenCV of cv.Trenes) {
                 if (trenCV.Id == idTren) trenCV.Id = newId;
             }
         }
@@ -251,6 +257,9 @@ class numerador {
     onCambioReservaSeccion(idSeccion) {
         const sec = this.secciones[idSeccion];
         if (!sec) return [];
+        const cv = this.cvs[this.getIdCV(idSeccion)];
+        // Esperar a que se ocupe el CV para mantener reserva de tren
+        if (cv && cv.Estado !== "Ocupado" && sec.Estado === "Ocupado") return [];
         let lado = this.seccionIsReservada(idSeccion);
         let changed = new Set();
         let tren = null;
@@ -298,10 +307,7 @@ class numerador {
         const prevEstado = blq.Estado;
         if (estado === "Emisor") blq.Estado = blq.Lado;
         else if (estado === "Receptor") blq.Estado = oppLado(blq.Lado);
-        else {
-            blq.Estado = estado;
-            return;
-        }
+        else blq.Estado = estado;
         if (prevEstado === blq.Estado) return;
         let changed = new Set();
         for (const [id, sec] of Object.entries(this.secciones)) {
@@ -313,7 +319,7 @@ class numerador {
     }
     onCambioEstadoAguja(idAguja, estado, dir) {
         const sec = this.secciones[idAguja];
-        if (!sec || !sec.Tipo == "Aguja") return;
+        if (!sec || sec.Tipo !== "Aguja") return;
         sec.Posición = dir;
         this.onCambioEstadoSeccion(idAguja, estado);
     }
@@ -330,31 +336,33 @@ class numerador {
         let changedCV = new Set();
         if (estado === "Ocupado") {
             const prioridad = (tren) => {
-                let sentidoReservado = null;
-                if (tren.Conexión) {
-                    sentidoReservado = this.seccionIsReservada(tren.Conexión.IdPropio);
-                }
-                if (tren.SentidoAnterior === tren.Sentido) {
-                    if (sentidoReservado === tren.Sentido) return 8;
-                    else if (sentidoReservado) return 2;
-                    else return 5;
-                } else if (tren.SentidoAnterior) {
-                    if (sentidoReservado === tren.Sentido) return 6;
-                    else if (sentidoReservado) return 0;
-                    else return 3;
-                } else {
-                    if (sentidoReservado === tren.Sentido) return 7;
-                    else if (sentidoReservado) return 1;
-                    else return 4;
-                }
+                const sec = this.secciones[tren.Conexión.IdPropio];
+                let pri = 0;
+                if (sec.TrenReservado && sec.TrenReservado.Id === tren.Id) pri += 1;
+                pri *= 2;
+                const sig = this.siguienteSeccion(tren.Conexión.IdPropio);
+                if (sig && sig.Id === tren.Conexión.Id) pri += 1;
+                pri *= 3;
+                if (sec.LadoReserva && sec.LadoReserva === tren.Sentido)
+                    pri += 2;
+                else if (!sec.LadoReserva)
+                    pri += 1;
+                pri *= 3;
+                if (tren.SentidoAnterior === tren.Sentido)
+                    pri += 2;
+                else if (!tren.SentidoAnterior)
+                    pri += 1;
+                return pri;
             }
             let candidatos = []
             for (let lado of ["Impar", "Par"]) {
                 for (let sig of cv.Conexiones[lado]) {
+                    const lado2 = sig.InvertirParidad ? oppLado(lado) : lado;
+                    if (this.siguienteSeccion(sig.Id, oppLado(lado2), false).Id !== sig.IdPropio) continue;
+                    const sec2 = this.secciones[sig.Id];
+                    if (!sec2 || sec2.Estado !== "Ocupado") continue;
                     const cv2 = this.cvs[sig.IdCV];
-                    // TODO: comprobar if cv es accesible desde cv2
                     if (cv2 && cv2.Trenes.length > 0) {
-                        const lado2 = sig.InvertirParidad ? oppLado(lado) : lado;
                         const tren2 = lado2 === "Par" ? cv2.Trenes[0] : cv2.Trenes[cv2.Trenes.length-1];
                         candidatos.push({
                             Id: tren2.Id,
@@ -427,12 +435,8 @@ class numerador {
                 if (!ladoEliminar) {
                     // Comprobar sentido de circulación
                     for (const lado of ["Impar", "Par"]) {
-                        /*let sig = this.siguienteSeccion(idSeccion, lado, false);
-                        if (!sig) continue;
-                        const sec2 = this.secciones[sig.Id];
-                        if (!sec2 || sec2.Estado !== "Ocupado") continue;*/
                         for (const sig of cv.Conexiones[lado]) {
-                            // TODO: comprobar si sig.Id es accesible desde sig.IdPropio
+                            if (this.siguienteSeccion(sig.IdPropio, lado, false).Id !== sig.Id) continue;
                             const cv2 = this.cvs[sig.IdCV];
                             if (!cv2 || cv2.Estado !== "Ocupado") continue;
                             const sec2 = this.secciones[sig.Id];
@@ -454,7 +458,7 @@ class numerador {
                         const sec2 = this.secciones[sig.Id];
                         if (!sec2 || sec2.Estado !== "Ocupado") continue;*/
                         for (const sig of cv.Conexiones[lado]) {
-                            // TODO: comprobar si sig.Id es accesible desde sig.IdPropio
+                            if (this.siguienteSeccion(sig.IdPropio, lado, false).Id !== sig.Id) continue;
                             const cv2 = this.cvs[sig.IdCV];
                             if (!cv2 || cv2.Estado !== "Ocupado") continue;
                             const sec2 = this.secciones[sig.Id];
@@ -493,6 +497,9 @@ class numerador {
         }
         cv.Estado = estado;
         let changed = new Set()
+        for (const idSec of cv.Secciones) {
+            changed = new Set([...changed, ...this.onCambioReservaSeccion(idSec)])
+        }
         for (const idCV2 of changedCV) {
             const cv2 = this.cvs[idCV2];
             if (!cv2) continue;

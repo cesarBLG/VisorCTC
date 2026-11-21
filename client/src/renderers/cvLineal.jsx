@@ -16,8 +16,11 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
   comp.querySelector('[inkscape\\:label="bar_down"]').style.visibility = ((est.CV_CEJES_PREN ?? 0) == 1 && isBlinking) ? 'visible' : 'hidden';
   comp.querySelector('[inkscape\\:label="me_up"]').style.visibility = (est.CV_ME ?? 0) == 1 ? 'visible' : 'hidden';
   comp.querySelector('[inkscape\\:label="me_down"]').style.visibility = (est.CV_ME ?? 0) == 1 ? 'visible' : 'hidden';
-  comp.querySelector('[inkscape\\:label="nombre"]').querySelector('tspan').style.fill = '#ff0';
-  comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = '#000';
+  const nom = comp.querySelector('[inkscape\\:label="nombre"]');
+  if (nom) {
+    nom.querySelector('tspan').style.fill = '#ff0';
+    comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = '#000';
+  }
   const bvs = comp.querySelectorAll('[inkscape\\:label="bv"]');
   bvs.forEach(bv => {
     bv.style.visibility = (est.CV_BV ?? 0) == 1 ? 'visible' : 'hidden';
@@ -62,6 +65,7 @@ export const renderCvLineal = (el, state, numerador, isBlinking) => {
     text.textContent = trenes[0].Id;
     if (trenes.length > 1) text.textContent = text.textContent + "+" + trenes[1].Id;
     rect.style.visibility = 'visible';
+    rect.style.fill = "#000";
   } else {
     text.textContent = "";
     rect.style.visibility = 'hidden';

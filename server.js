@@ -205,9 +205,12 @@ const handleMessage = (topic, message) => {
           const isReservado = (e) => e.AG_EST === 1 || e.AG_EST === 2;
           numeradorTrenes?.onCambioEstadoAguja(element.Id, isOcupado(element) ? "Ocupado" : isReservado(element) ? "Reservado": "Libre", element.AG_DIR === 2 ? "-" : (element.AG_DIR === 1 ? "+" : null));
         }
-        /*if (element.Tipo === 8) {
-          numeradorTrenes?.onCambioEstadoAguja(element.Id, )
-        }*/
+        if (element.Tipo === 6) {
+          const isOcupado = (e) => e.CVX_EST === 3;
+          const isReservado = (e) => e.CVX_EST === 1 || e.CVX_EST === 2;
+          numeradorTrenes?.onCambioEstadoCV(element.Id, isOcupado(element) ? "Ocupado" : "Libre");
+          numeradorTrenes?.onCambioEstadoCruzamiento(element.Id, isOcupado(element) ? "Ocupado" : isReservado(element) ? "Reservado": "Libre", element.CVX_DIR === 2 ? "-" : (element.CVX_DIR === 1 ? "+" : null))
+        }
         if (element.Tipo === 14) {
           numeradorTrenes?.onCambioBloqueo(element.Id, (element.BLQ_EST_SAL === 1 || element.BLQ_EST_SAL === 2) ? "Emisor" : (element.BLQ_EST_ENT === 1 ? "Receptor" : null))
         }

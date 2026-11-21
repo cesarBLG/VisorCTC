@@ -24,7 +24,7 @@ export const renderFMV = (el, state, isBlinking) => {
         const bd = c.querySelector('[inkscape\\:label="bd"]');
         if (bd) {
             bd.style.visibility = (ir.FMV_BD ?? 0) === 1 && (index === ir.FMV_DIF_ELEM) ? 'visible' : 'hidden';
-            bd.querySelector('[inkscape\\:label="rectExterior"]').style.visibility = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 ? 'visible' : 'hidden';
+            bd.querySelector('[inkscape\\:label="rectExterior"]').style.visibility = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 && (index === ir.FMV_DIF_ELEM) ? 'visible' : 'hidden';
             bd.querySelector('[inkscape\\:label="rectInterior"]').style.fill = (ir.FMV_BD ?? 0) === 1 && (ir.FMV_ME ?? 0) === 1 ? '#000' : '#fff';
         }
     }

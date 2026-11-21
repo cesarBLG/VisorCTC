@@ -35,6 +35,7 @@ export const renderBloqueo = (el, state, isBlinking) => {
   princ.querySelector('[inkscape\\:label="rectReceptor"]').style.fill = fondo_ent;
   princ.querySelector('[inkscape\\:label="flechaEmisor"]').style.fill = (isBlinking || !blink_sal) ? color_sal : 'transparent';
   princ.querySelector('[inkscape\\:label="rectEmisor"]').style.fill = fondo_sal;
+  princ.querySelector('[inkscape\\:label="me"]').style.visibility = (bloq.BLQ_ME ?? 0) === 1 ? 'visible' : 'hidden';
   const proh = comp.querySelector('[inkscape\\:label="prohibir"]')
   if (proh) {
     proh.querySelector('[inkscape\\:label="flechaReceptor"]').style.visibility = (bloq.BLQ_PROHI_ENT ?? 0) === 1 ? 'visible' : 'hidden';

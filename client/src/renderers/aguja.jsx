@@ -132,8 +132,11 @@ export const renderAguja = (el, state, isBlinking) => {
   setDesliz(comp.querySelector('[inkscape\\:label="deslizRneg"]'), bar_inv);
   setDesliz(comp.querySelector('[inkscape\\:label="deslizLneg2"]'), null);
 
-  comp.querySelector('[inkscape\\:label="nombre"]').querySelector('tspan').style.fill = (est.AG_BA ?? 0) ? '#f00' : '#fff';
-  comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = '#000';
+  const nom = comp.querySelector('[inkscape\\:label="nombre"]');
+  if (nom) {
+    nom.querySelector('tspan').style.fill = (est.AG_BA ?? 0) ? '#f00' : '#fff';
+    comp.querySelector('[inkscape\\:label="fondo_nombre"]').style.fill = '#000';
+  }
 
   const bia = comp.querySelector('[inkscape\\:label="bv"]');
   if (bia) {
