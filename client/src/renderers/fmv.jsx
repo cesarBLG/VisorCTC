@@ -10,7 +10,7 @@ export const renderFMV = (el, state, isBlinking) => {
     }
     const sels = []
     sels.push(el.Componente.querySelector('[inkscape\\:label="señal"]')?.querySelector('[inkscape\\:label="FMV"]'))
-    sels.push(null);
+    sels.push(el.Componente.querySelector('[inkscape\\:label="final"]')?.querySelector('[inkscape\\:label="FMV"]'))
     sels.push(el.Componente.querySelector('[inkscape\\:label="estacion"]')?.querySelector('[inkscape\\:label="FMV"]'));
     sels.push(el.Componente.querySelector('[inkscape\\:label="trayecto"]')?.querySelector('[inkscape\\:label="FMV"]'));
     for (const [index, c] of sels.entries()) {
