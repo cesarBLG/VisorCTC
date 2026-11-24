@@ -12,12 +12,17 @@ class numerador {
         this.señales = {}
         this.contador = 0;
         this.cvs_definidos = {};
-        const normalizeConnections = (conexiones) => {
+        const normalizeConnections = (conexiones, id_dep) => {
             for (const lado of ["Impar", "Par"]) {
                 if (!conexiones[lado]) conexiones[lado] = [];
                 for (let i = 0; i < conexiones[lado].length; i++) {
-                    const conex = conexiones[lado][i];
-                    if (!conex.Id) conexiones[lado][i] = { Id: conex };
+                    let conex = conexiones[lado][i];
+                    if (!conex.Id) {
+                        conex = { Id: conex };
+                        conexiones[lado][i] = conex;
+                    }
+                    if (!conex.Id.includes(":"))
+                        conex.Id = `${id_dep}:${conex.Id}`;
                 }
             }
         };
@@ -31,7 +36,7 @@ class numerador {
                         sec.Conexiones[sec.Lado] = sec.SeccionesTalón;
                         sec.Conexiones[oppLado(sec.Lado)] = sec.SecciónPunta ? [sec.SecciónPunta] : [];
                     }
-                    normalizeConnections(sec.Conexiones);
+                    normalizeConnections(sec.Conexiones, dep_id);
                     sec.Trenes = [];
                     sec.TrenReservado = null;
                     this.secciones[full_id] = sec;
@@ -118,9 +123,15 @@ class numerador {
         return "*"+this.contador++;
     }
     asignarTrenManual(idCV, idTren) {
-        this.borrarTrenManual(idTren);
         const cv = this.cvs[idCV];
         if (!cv) return;
+        if (cv.Estado !== "Ocupado")
+        {
+            if (!cv.Cola) cv.Cola = [];
+            cv.Cola.push({Id: idTren});
+            return;
+        }
+        this.borrarTrenManual(idTren);
         for (const tren of cv.Trenes) {
             const tren2 = this.trenes[tren.Id];
             if (!tren2) continue;
@@ -389,7 +400,11 @@ class numerador {
                 }
             }
 
-            if (!tren || varios || maxPrioridad < 0) tren = {Id: this.idDesconocido()}
+            if (!tren || varios || maxPrioridad < 0)
+            {
+                if (cv.Cola && cv.Cola.length > 0) tren = cv.Cola.shift();
+                else tren = {Id: this.idDesconocido()}
+            }
 
             if (tren.Sentido === "Par") cv.Trenes.unshift(tren);
             else cv.Trenes.push(tren);

@@ -87,6 +87,7 @@ mqttClient.on("connect", () => {
   mqttClient.subscribe("remota/+");
   mqttClient.subscribe("gestor_conexion");
   mqttClient.subscribe("log");
+  mqttClient.subscribe("numerador");
 });
 
 const datosRemota = {};
@@ -159,6 +160,13 @@ mqttClient.on("error", (err) => {
 
 const handleMessage = (topic, message) => {
   //console.log(`📩 MQTT [${topic}] ${message}`);
+
+  if (topic === "numerador") {
+    const data = JSON.parse(message);
+    numeradorTrenes?.asignarTrenManual(data.Id, data.Tren);
+    return;
+  }
+
   let toSend = {
     topic: topic,
     payload: message
