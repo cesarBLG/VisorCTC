@@ -12,17 +12,20 @@ class numerador {
         this.señales = {}
         this.contador = 0;
         this.cvs_definidos = {};
+        const normalizeId = (id, id_dep) => {
+            if (!id.includes(":"))
+                return `${id_dep}:${id}`;
+            return id;
+        };
         const normalizeConnections = (conexiones, id_dep) => {
             for (const lado of ["Impar", "Par"]) {
                 if (!conexiones[lado]) conexiones[lado] = [];
                 for (let i = 0; i < conexiones[lado].length; i++) {
                     let conex = conexiones[lado][i];
-                    if (!conex.Id) {
+                    if (!conex.Id)
                         conex = { Id: conex };
-                        conexiones[lado][i] = conex;
-                    }
-                    if (!conex.Id.includes(":"))
-                        conex.Id = `${id_dep}:${conex.Id}`;
+                    conex.Id = normalizeId(conex.Id, id_dep);
+                    conexiones[lado][i] = conex;
                 }
             }
         };
@@ -36,6 +39,8 @@ class numerador {
                         sec.Conexiones[sec.Lado] = sec.SeccionesTalón;
                         sec.Conexiones[oppLado(sec.Lado)] = sec.SecciónPunta ? [sec.SecciónPunta] : [];
                     }
+                    if (sec.CV)
+                        sec.CV = normalizeId(sec.CV, dep_id);
                     normalizeConnections(sec.Conexiones, dep_id);
                     sec.Trenes = [];
                     sec.TrenReservado = null;
