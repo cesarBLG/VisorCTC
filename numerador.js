@@ -12,6 +12,7 @@ class numerador {
         this.señales = {}
         this.contador = 0;
         this.cvs_definidos = {};
+        this.ids_normalizados_secciones = {};
         const normalizeId = (id, id_dep) => {
             if (!id.includes(":"))
                 return `${id_dep}:${id}`;
@@ -39,20 +40,27 @@ class numerador {
                         sec.Conexiones[sec.Lado] = sec.SeccionesTalón;
                         sec.Conexiones[oppLado(sec.Lado)] = sec.SecciónPunta ? [sec.SecciónPunta] : [];
                     }
+                    this.ids_normalizados_secciones[full_id] = full_id;
                     if (sec.CV)
                         sec.CV = normalizeId(sec.CV, dep_id);
+                    if (sec.Bloqueo)
+                        sec.Bloqueo = normalizeId(sec.Bloqueo, dep_id);
                     normalizeConnections(sec.Conexiones, dep_id);
                     sec.Trenes = [];
                     sec.TrenReservado = null;
                     this.secciones[full_id] = sec;
-                    if (sec.Alias) this.secciones[sec.Alias] = sec;
+                    if (sec.Alias) {
+                        this.secciones[sec.Alias] = sec;
+                        this.ids_normalizados_secciones[sec.Alias] = full_id;
+                    }
                 }
                 for (const blq of dependencia.Bloqueos ?? []) {
-                    const full_id = dep_id+":"+blq.Colateral;
+                    const full_id = `${dep_id}:${blq.Colateral}${blq.Via ?? ""}`
                     this.bloqueos[full_id] = blq;
                 }
                 for (const [id, sig] of Object.entries(dependencia.Señales)) {
                     const full_id = dep_id+":"+id;
+                    sig.Sección = normalizeId(sig.Sección, dep_id);
                     const sec = this.secciones[sig.Sección];
                     if (!sec) continue;
                     if (!sig.Pin) sig.Pin = 0;
@@ -65,6 +73,7 @@ class numerador {
                 }
                 for (const [id, cv] of Object.entries(dependencia.CVs)) {
                     const full_id = dep_id+":"+id;
+                    cv.Id = full_id;
                     this.cvs_definidos[full_id] = cv;
                     this.cvs[full_id] = {Conexiones: {Par: [], Impar: []}, Trenes: [], Secciones: [], Id: full_id};
                     if (cv.Alias) {
@@ -74,7 +83,9 @@ class numerador {
                 }
             }
         }
+        // Aliases are additional lookup keys, not additional physical sections.
         for (const [id, sec] of Object.entries(this.secciones)) {
+            if (this.ids_normalizados_secciones[id] !== id) continue;
             const id_cv = this.getIdCV(id, sec);
             if (!id_cv) continue;
             this.cvs[id_cv].Secciones.push(id);
@@ -99,7 +110,7 @@ class numerador {
         if (sec.CV)
             id_cv = sec.CV;
         if (this.cvs_definidos[id_cv]) {
-            return id_cv;
+            return this.cvs_definidos[id_cv].Id;
         }
         return null;
     }
@@ -130,6 +141,7 @@ class numerador {
     asignarTrenManual(idCV, idTren) {
         const cv = this.cvs[idCV];
         if (!cv) return;
+        idCV = cv.Id;
         if (cv.Estado !== "Ocupado")
         {
             if (!cv.Cola) cv.Cola = [];
@@ -209,7 +221,7 @@ class numerador {
                     const sig = this.siguienteSeccion(currentId, currentLado, true);
                     if (!sig) break;
                     const cross = this.siguienteSeccion(sig.Id, sig.InvertirParidad ? currentLado : oppLado(currentLado), true);
-                    if (!cross || (cross.Id !== currentId && cross.Id !== sec2.Alias)) break;
+                    if (!cross || !this.isSameSection(cross.Id, currentId)) break;
                     const pin = this.getPin(currentId, sig.Id, currentLado);
                     if (sec2.Señales) {
                         let stop = false;
@@ -254,12 +266,17 @@ class numerador {
         }
         return null;
     }
+    isSameSection(id1, id2) {
+        const normalizedId1 = this.ids_normalizados_secciones[id1] ?? id1;
+        const normalizedId2 = this.ids_normalizados_secciones[id2] ?? id2;
+        return normalizedId1 === normalizedId2;
+    }
     getPin(idSeccion, idSigSeccion, lado) {
         const sec = this.secciones[idSeccion];
         if (!sec) return -1;
         if (!idSigSeccion && sec.Conexiones[lado].length == 1) return 0;
         for (const [pin, conex] of sec.Conexiones[lado].entries()) {
-            if (conex.Id === idSigSeccion) return pin;
+            if (this.isSameSection(conex.Id, idSigSeccion)) return pin;
         }
         return -1;
     }
@@ -284,9 +301,8 @@ class numerador {
             if (!sig) return [];
             const sec2 = this.secciones[sig.Id];
             if (!sec2) return [];
-            const cv = this.cvs[this.getIdCV(sig.Id)];
-            if (cv && cv.Estado === "Ocupado") {
-                const cv2 = this.cvs[this.getIdCV(sig.Id)];
+            const cv2 = this.cvs[this.getIdCV(sig.Id)];
+            if (cv2 && cv2.Estado === "Ocupado") {
                 if (cv2.Trenes.length > 0) {
                     tren = lado === "Impar" ? cv2.Trenes[0] : cv2.Trenes[cv2.Trenes.length-1];
                     tren = {Id: tren.Id, Sentido: lado};
@@ -348,6 +364,7 @@ class numerador {
     onCambioEstadoCV(idCV, estado) {
         const cv = this.cvs[idCV];
         if (!cv) return;
+        idCV = cv.Id;
         if (cv.Estado === estado) return;
         let changedCV = new Set();
         if (estado === "Ocupado") {
@@ -356,8 +373,8 @@ class numerador {
                 let pri = 0;
                 if (sec.TrenReservado && sec.TrenReservado.Id === tren.Id) pri += 1;
                 pri *= 2;
-                const sig = this.siguienteSeccion(tren.Conexión.IdPropio);
-                if (sig && sig.Id === tren.Conexión.Id) pri += 1;
+                const sig = this.siguienteSeccion(tren.Conexión.IdPropio, tren.Conexión.InvertirParidad ? oppLado(tren.Sentido) : tren.Sentido, false);
+                if (sig && this.isSameSection(sig.Id, tren.Conexión.Id)) pri += 1;
                 pri *= 3;
                 if (sec.LadoReserva && sec.LadoReserva === tren.Sentido)
                     pri += 2;
@@ -374,7 +391,7 @@ class numerador {
             for (let lado of ["Impar", "Par"]) {
                 for (let sig of cv.Conexiones[lado]) {
                     const lado2 = sig.InvertirParidad ? oppLado(lado) : lado;
-                    if (this.siguienteSeccion(sig.Id, oppLado(lado2), false).Id !== sig.IdPropio) continue;
+                    if (!this.isSameSection(this.siguienteSeccion(sig.Id, oppLado(lado2), false).Id, sig.IdPropio)) continue;
                     const sec2 = this.secciones[sig.Id];
                     if (!sec2 || sec2.Estado !== "Ocupado") continue;
                     const cv2 = this.cvs[sig.IdCV];
@@ -456,7 +473,7 @@ class numerador {
                     // Comprobar sentido de circulación
                     for (const lado of ["Impar", "Par"]) {
                         for (const sig of cv.Conexiones[lado]) {
-                            if (this.siguienteSeccion(sig.IdPropio, lado, false).Id !== sig.Id) continue;
+                            if (!this.isSameSection(this.siguienteSeccion(sig.IdPropio, lado, false).Id, sig.Id)) continue;
                             const cv2 = this.cvs[sig.IdCV];
                             if (!cv2 || cv2.Estado !== "Ocupado") continue;
                             const sec2 = this.secciones[sig.Id];
@@ -478,7 +495,7 @@ class numerador {
                         const sec2 = this.secciones[sig.Id];
                         if (!sec2 || sec2.Estado !== "Ocupado") continue;*/
                         for (const sig of cv.Conexiones[lado]) {
-                            if (this.siguienteSeccion(sig.IdPropio, lado, false).Id !== sig.Id) continue;
+                            if (!this.isSameSection(this.siguienteSeccion(sig.IdPropio, lado, false).Id, sig.Id)) continue;
                             const cv2 = this.cvs[sig.IdCV];
                             if (!cv2 || cv2.Estado !== "Ocupado") continue;
                             const sec2 = this.secciones[sig.Id];
